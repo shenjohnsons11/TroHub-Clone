@@ -45,14 +45,27 @@ trohub-web-only/                 <-- THƯ MỤC GỐC CHỨA TẤT CẢ
 Toàn bộ source code đã được cấu hình trỏ trực tiếp đến máy chủ Render (`https://api-phong-tro.onrender.com/api`).
 Bạn **KHÔNG CẦN** phải chạy Database hay chạy Backend API ở máy tính cá nhân. Chỉ cần chạy giao diện Frontend/Mobile là có sẵn dữ liệu chung của cả team!
 
-### 1. Khởi động Frontend (Web Admin)
+### CÁCH 1: CHẠY BẰNG DOCKER (NHANH NHẤT 🚀)
+Chỉ cần bạn có cài sẵn Docker trên máy, hãy gõ 1 dòng lệnh duy nhất này ở thư mục gốc:
+```bash
+docker-compose up --build
+```
+Hệ thống sẽ tự động cài đặt mọi thứ và chạy lên:
+- Web Admin: [http://localhost:5173](http://localhost:5173)
+- Mobile App: [http://localhost:8081](http://localhost:8081)
+
+---
+
+### CÁCH 2: CHẠY THỦ CÔNG (Nếu không có Docker)
+
+**1. Khởi động Frontend (Web Admin)**
 ```bash
 # Từ thư mục gốc trohub-web-only/
 npm run dev
 # Web Admin chạy tại: http://localhost:5173
 ```
 
-### 2. Khởi động Mobile App (Expo)
+**2. Khởi động Mobile App (Expo)**
 ```bash
 # Từ thư mục gốc, di chuyển vào thư mục app
 cd TroHub_repo
@@ -64,6 +77,7 @@ npm run web     # Mở giao diện trên trình duyệt
 ```
 
 *(Lưu ý: Nếu bạn muốn test API cục bộ để tự code thêm chức năng backend, hãy tham khảo folder `API_DuAnTotNghiep/README.md`)*
+
 
 
 ---

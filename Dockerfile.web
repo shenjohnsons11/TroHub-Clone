@@ -1,0 +1,10 @@
+FROM python:3.9-slim
+WORKDIR /app
+
+# Copy toàn bộ code web admin vào container
+COPY . /app/
+
+EXPOSE 5173
+
+# Chạy server python tĩnh với binding 0.0.0.0 để Docker map ra ngoài
+CMD ["python3", "-m", "http.server", "5173", "--bind", "0.0.0.0"]
