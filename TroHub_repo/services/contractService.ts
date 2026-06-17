@@ -201,9 +201,9 @@ export const contractService = {
         throw new Error("Không tìm thấy token đăng nhập");
       }
 
-      // Backend đang sử dụng /api/me/sign-contract/:contractId
+      // Đã sửa lại endpoint để tương thích với backend trên Render
       const response = await apiClient.put<ContractActionResponse>(
-        `/me/sign-contract/${contractId}`,
+        `/contracts/${contractId}/sign`,
         {},
         token
       );
