@@ -1,0 +1,30 @@
+version: '3.8'
+
+services:
+  web-admin:
+    build:
+      context: .
+      dockerfile: Dockerfile.web
+    container_name: trohub-web-admin
+    ports:
+      - "5173:5173"
+    volumes:
+      - .:/app
+      - /app/node_modules
+      - /app/API_DuAnTotNghiep
+      - /app/TroHub_repo
+
+  mobile-app:
+    build:
+      context: ./TroHub_repo
+      dockerfile: Dockerfile.expo
+    container_name: trohub-mobile-app
+    ports:
+      - "8081:8081"
+    volumes:
+      - ./TroHub_repo:/app
+      - /app/node_modules
+    environment:
+      - EXPO_DEVTOOLS_LISTEN_ADDRESS=0.0.0.0
+      - REACT_NATIVE_PACKAGER_HOSTNAME=localhost
+      - CHOKIDAR_USEPOLLING=true
