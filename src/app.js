@@ -105,7 +105,13 @@ const findRoom = () => arrays.rooms().find((room) => room.id === state.selectedR
 const findTenant = () => arrays.tenants().find((tenant) => tenant.id === state.selectedTenant) || {};
 const findInvoice = () => arrays.invoices().find((invoice) => invoice.id === state.selectedInvoice) || arrays.invoices()[0] || {};
 const findRepair = () => arrays.repairs().find((repair) => repair.id === state.selectedRepair) || sortedRepairs()[0] || {};
-const findContract = () => arrays.contracts().find((contract) => contract.id === state.selectedContract) || arrays.contracts()[0] || appData.contract;
+const findContract = () => {
+  if (state.selectedContract === "") {
+    const r = arrays.rooms().find(r => r.id === state.contractSelectedRoom) || arrays.rooms()[0] || {};
+    return { id: "", room: r.id || "", tenant: "", rent: r.rent || 0, deposit: r.deposit || 0, status: "Nháp" };
+  }
+  return arrays.contracts().find((contract) => contract.id === state.selectedContract) || arrays.contracts()[0] || { id: "", room: "", tenant: "", rent: 0, deposit: 0, status: "Nháp" };
+};
 const tenantPortal = () => state.tenantPortal || {};
 const tenantInvoices = () => tenantPortal().invoices || [];
 const tenantPayments = () => tenantPortal().payments || [];
@@ -601,15 +607,12 @@ const renderTenantForm = () => {
   const tenant = isNew ? { id: "", name: "", phone: "", email: "", room: state.selectedRoom || "", citizenId: "", startDate: formatDate(new Date()), status: "Đang thuê" } : findTenant();
   return renderAdminShell(isNew ? "Thêm khách thuê" : "Sửa khách thuê", `
     <article class="card form-card narrow" data-form="tenant">
-      ${field("Mã khách", tenant.id, "text", "id", isNew ? "" : "readonly")}
-      ${field("Họ tên", tenant.name, "text", "name")}
-      ${field("Số điện thoại", tenant.phone, "text", "phone")}
-      ${field("Email (Dùng làm tên đăng nhập)", tenant.email || "", "email", "email")}
-      ${field("Mật khẩu", tenant.password || "", "password", "password")}
-      ${field("Phòng", tenant.room, "text", "room")}
+      ${!isNew ? field("Mã khách (Hệ thống)", tenant.id, "text", "id", "readonly") : ""}
+      ${field("Email *", tenant.email || "", "email", "email", "placeholder='Nhập Email cốt lõi để tìm hoặc tạo mới'")}
+      ${field("Số điện thoại", tenant.phone, "text", "phone", isNew ? "placeholder='Có thể bỏ trống nếu khách đã có App'" : "")}
+      ${field("Họ tên", tenant.name, "text", "name", isNew ? "placeholder='Có thể bỏ trống nếu khách đã có App'" : "")}
       ${field("CCCD", tenant.citizenId, "text", "citizenId")}
-      ${field("Ngày bắt đầu", tenant.startDate, "text", "startDate")}
-      ${selectField("Trạng thái", tenant.status, ["Đang thuê", "Ngừng thuê"], "status")}
+      ${!isNew ? selectField("Trạng thái", tenant.status, ["Đang thuê", "Ngừng thuê"], "status") : ""}
       <div class="form-actions">
         ${button("Hủy", "cancel-tenant", "outline")}
         ${button("Lưu khách thuê", "save-tenant")}
@@ -1679,12 +1682,15 @@ const handleAction = async (action) => {
       const payload = collectForm("tenant");
       payload.startDate = state.tenantStartDate;
       
+      if (payload.phone) payload.phone = payload.phone.replace(/\\D/g, "");
+      if (payload.citizenId) payload.citizenId = payload.citizenId.replace(/\\D/g, "");
+
       if (!state.selectedTenant) {
-        if (!payload.email) return showToast("Vui lòng nhập Email (Dùng làm tên đăng nhập)!");
-        if (!payload.password) return showToast("Vui lòng nhập Mật khẩu cho tài khoản!");
+        if (!payload.email) return showToast("Vui lòng nhập Email cốt lõi để tìm hoặc tạo mới!");
       }
       
-      if (!payload.password) delete payload.password;
+      if (payload.phone && payload.phone.length !== 10) return showToast("Số điện thoại phải gồm đúng 10 chữ số");
+      if (payload.citizenId && payload.citizenId.length !== 12) return showToast("Số CCCD phải gồm đúng 12 chữ số");
       
       try {
         if (state.selectedTenant) {
@@ -1868,6 +1874,13 @@ app.addEventListener("change", (event) => {
   if (target.dataset.field === "room" && state.adminPage === "invoice-create") {
     state.room = target.value;
     state.selectedRoom = target.value;
+    render();
+    return;
+  }
+
+  // Tự động tải lại form Tạo Hợp Đồng khi chọn Phòng (để auto-fill tiền thuê/cọc)
+  if (target.dataset.field === "room" && state.adminPage === "contract" && state.selectedContract === "") {
+    state.contractSelectedRoom = target.value;
     render();
     return;
   }

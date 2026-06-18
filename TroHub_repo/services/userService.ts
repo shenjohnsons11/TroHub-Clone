@@ -46,8 +46,8 @@ const mapApiUserToProfile = (user: ApiUser): UserProfile => {
     phone: user.phone || user.username || "",
     email: user.email || "",
     cccd: user.idCard || "",
-    room: "A101",
-    startDate: "01/01/2026",
+    room: "",
+    startDate: "",
     role: user.role || 2,
   };
 };

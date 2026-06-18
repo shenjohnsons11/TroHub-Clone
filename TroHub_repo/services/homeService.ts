@@ -24,9 +24,11 @@ export const homeService = {
       const unpaidInvoice = invoices.find((item) => item.status === "unpaid");
       const latestRepair = repairs[0];
 
+      const isSigned = contract && ["active", "awaiting_approval", "requesting_termination"].includes(contract.status);
+
       return {
         tenantName: profile.fullName || "Người thuê",
-        room: contract?.room || profile.room || "Chưa có phòng",
+        room: isSigned ? contract.room : "Chưa có phòng",
 
         totalAmount: unpaidInvoice?.amount || "0đ",
         paymentStatus: unpaidInvoice ? "unpaid" : "paid",

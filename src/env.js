@@ -1,3 +1,3 @@
 export const ENV = {
-  API_URL: "https://api-phong-tro.onrender.com/api"
+  API_URL: "http://192.168.1.12:3000/api"
 };

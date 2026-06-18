@@ -1,9 +1,12 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { ScrollView, Text, StyleSheet, View, Pressable } from "react-native";
 import Card from "../components/Card";
 import { COLORS } from "../constants/theme";
 import ChangePasswordModal from "../components/ChangePasswordModal";
 import { UserProfile } from "../types/UserProfile";
+import { invoiceService } from "../services/invoiceService";
+import { repairService } from "../services/repairService";
+import { contractService } from "../services/contractService";
 
 type Props = {
   profile: UserProfile;
@@ -40,6 +43,29 @@ export default function AccountScreen({
   onNavigate,
 }: Props) {
   const [passwordVisible, setPasswordVisible] = useState(false);
+  const [stats, setStats] = useState({ invoices: 0, repairs: 0, months: 0, hasContract: false });
+
+  useEffect(() => {
+    async function loadStats() {
+      try {
+        const [invoices, repairs, contract] = await Promise.all([
+          invoiceService.getInvoices(),
+          repairService.getRequests(),
+          contractService.getContract()
+        ]);
+        const isSigned = contract && ["active", "awaiting_approval", "requesting_termination"].includes(contract.status);
+        setStats({
+          invoices: invoices.length,
+          repairs: repairs.length,
+          months: contract?.usedMonths || 0,
+          hasContract: !!isSigned
+        });
+      } catch (error) {
+        console.log("Lỗi tải thống kê AccountScreen:", error);
+      }
+    }
+    loadStats();
+  }, []);
 
   const handleMenuPress = (key: string) => {
     if (key === "profile") {
@@ -82,26 +108,30 @@ export default function AccountScreen({
           <Text style={styles.phone}>{profile.phone}</Text>
 
           <View style={styles.roomBadge}>
-            <Text style={styles.roomText}>Phòng {profile.room}</Text>
+            <Text style={styles.roomText}>
+              {stats.hasContract ? `Phòng ${profile.room}` : "Chưa có phòng"}
+            </Text>
           </View>
         </Card>
 
-        <View style={styles.statRow}>
-          <Card style={styles.statCard}>
-            <Text style={styles.statNumber}>2</Text>
-            <Text style={styles.statLabel}>Hóa đơn</Text>
-          </Card>
+        {stats.hasContract && (
+          <View style={styles.statRow}>
+            <Card style={styles.statCard}>
+              <Text style={styles.statNumber}>{stats.invoices}</Text>
+              <Text style={styles.statLabel}>Hóa đơn</Text>
+            </Card>
 
-          <Card style={styles.statCard}>
-            <Text style={styles.statNumber}>1</Text>
-            <Text style={styles.statLabel}>Sửa chữa</Text>
-          </Card>
+            <Card style={styles.statCard}>
+              <Text style={styles.statNumber}>{stats.repairs}</Text>
+              <Text style={styles.statLabel}>Sửa chữa</Text>
+            </Card>
 
-          <Card style={styles.statCard}>
-            <Text style={styles.statNumber}>12</Text>
-            <Text style={styles.statLabel}>Tháng thuê</Text>
-          </Card>
-        </View>
+            <Card style={styles.statCard}>
+              <Text style={styles.statNumber}>{stats.months}</Text>
+              <Text style={styles.statLabel}>Tháng thuê</Text>
+            </Card>
+          </View>
+        )}
 
         <Text style={styles.sectionTitle}>Cài đặt tài khoản</Text>
 

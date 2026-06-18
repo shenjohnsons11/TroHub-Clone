@@ -9,7 +9,7 @@ const bcrypt = require('bcryptjs');
 // PHẦN 1: DÀNH CHO GIAO DIỆN WEB (CHỦ TRỌ QUẢN LÝ)
 // =========================================================================
 
-// 1. Lấy danh sách toàn bộ khách thuê (role = 2)
+// 1. Lấy danh sách toàn bộ khách thuê (role = 2) thuộc danh bạ của Chủ trọ
 exports.getAllTenants = async (req, res) => {
     try {
         let landlordId = null;
@@ -22,24 +22,22 @@ exports.getAllTenants = async (req, res) => {
             } catch(e) {}
         }
         
-        let tenants = await Account.find({ role: 2 }).lean().sort({ createdAt: -1 });
+        if (!landlordId) return res.status(401).json({ success: false, message: "Không tìm thấy thông tin chủ trọ!" });
+
+        // Lấy tất cả khách thuê mà trong linkedLandlords có chứa landlordId
+        let tenants = await Account.find({ role: 2, linkedLandlords: landlordId }).lean().sort({ createdAt: -1 });
         
-        // Populate room from active contracts (1: Hiệu lực, 5: Yêu cầu trả phòng)
+        // Populate room from active contracts (1: Hiệu lực, 5: Yêu cầu trả phòng) để hiển thị thông tin phòng nếu có
         const activeContracts = await Contract.find({ status: { $in: [1, 5] } }).populate('roomId');
-        
-        if (landlordId) {
-            const landlordRooms = await Room.find({ landlordId }).select('_id');
-            const roomIds = landlordRooms.map(r => r._id.toString());
-            const validContracts = activeContracts.filter(c => c.roomId && roomIds.includes(c.roomId._id.toString()));
-            const validTenantIds = validContracts.map(c => c.tenantId.toString());
-            tenants = tenants.filter(t => validTenantIds.includes(t._id.toString()));
-        }
         
         for (let t of tenants) {
             const contract = activeContracts.find(c => c.tenantId && c.tenantId.toString() === t._id.toString());
             if (contract && contract.roomId) {
                 t.room = contract.roomId.roomCode || contract.roomId.name;
                 t.contractStatus = contract.status;
+            } else {
+                t.room = "Chưa xếp phòng";
+                t.contractStatus = "Không có";
             }
         }
 
@@ -53,73 +51,72 @@ exports.getAllTenants = async (req, res) => {
     }
 };
 
-// 2. Thêm khách thuê mới (Tạo tài khoản + Gán phòng qua Hợp đồng)
+// 2. Thêm khách thuê mới (Chỉ thêm vào Danh bạ - linkedLandlords)
 exports.createTenant = async (req, res) => {
     try {
-        // Form UI Figma truyền lên: Họ tên, sđt, email, password, phòng, CCCD, ngày bắt đầu
-        const { fullName, phone, email, password, roomCode, idCard, startDate } = req.body;
-
-        if (!email) {
-            return res.status(400).json({ success: false, message: "Vui lòng nhập Email để làm tên đăng nhập!" });
+        let landlordId = null;
+        const authHeader = req.headers['authorization'];
+        if (authHeader && authHeader.startsWith('Bearer ')) {
+            const token = authHeader.split(' ')[1];
+            try {
+                const decoded = require('jsonwebtoken').verify(token, process.env.JWT_SECRET || 'trohub_secret_key_2026');
+                if (decoded.role === 1) landlordId = decoded.id;
+            } catch(e) {}
         }
-        if (!password) {
-            return res.status(400).json({ success: false, message: "Vui lòng nhập Mật khẩu cho tài khoản!" });
+        if (!landlordId) return res.status(401).json({ success: false, message: "Không tìm thấy thông tin chủ trọ!" });
+
+        const { fullName, name, phone, email, password, idCard, citizenId } = req.body;
+        const finalFullName = fullName || name;
+        const finalIdCard = idCard || citizenId;
+
+        if (!email && !phone) {
+            return res.status(400).json({ success: false, message: "Vui lòng nhập Email hoặc SĐT!" });
         }
 
-        // Kiểm tra Email đã tồn tại chưa
-        const existingAccount = await Account.findOne({ email, role: 2 });
+        // Tìm xem khách đã có tài khoản chưa
+        let existingAccount = await Account.findOne({ $or: [{ email }, { phone }], role: 2 });
+        
         if (existingAccount) {
-            return res.status(400).json({ success: false, message: "Email này đã được đăng ký!" });
+            // Nếu khách đã tồn tại, chỉ cần link landlordId vào linkedLandlords
+            if (!existingAccount.linkedLandlords.includes(landlordId)) {
+                existingAccount.linkedLandlords.push(landlordId);
+                await existingAccount.save();
+            }
+            return res.status(200).json({
+                success: true,
+                message: "Khách này đã dùng App. Đã tự động thêm vào danh sách quản lý của bạn!",
+                data: existingAccount
+            });
         }
 
-        // Tìm phòng để lấy ID phòng và Giá mặc định
-        const room = await Room.findOne({ roomCode });
-        if (!room) {
-            return res.status(404).json({ success: false, message: "Không tìm thấy mã phòng này!" });
-        }
-        if (room.status !== 0) {
-            return res.status(400).json({ success: false, message: "Phòng này hiện không trống!" });
+        // Nếu khách chưa tồn tại trên hệ thống, yêu cầu phải có SĐT để tạo tài khoản mới
+        if (!phone) {
+            return res.status(400).json({ success: false, message: "Khách này chưa có trên hệ thống, vui lòng nhập SĐT để tạo mới!" });
         }
 
-        // 1. Tạo tài khoản khách thuê
+        // Nếu khách chưa tồn tại, tạo mật khẩu mặc định là "123456"
+        const defaultPassword = "123456";
+
+        // Tạo tài khoản khách thuê mới
         const salt = await bcrypt.genSalt(10);
-        const hashedPassword = await bcrypt.hash(password, salt);
+        const hashedPassword = await bcrypt.hash(defaultPassword, salt);
 
         const newTenant = new Account({
-            username: email, // Dùng email làm username đăng nhập
+            username: email || phone,
             password: hashedPassword,
-            fullName,
+            fullName: finalFullName || "Khách mới",
             phone,
-            idCard,
+            email,
+            idCard: finalIdCard,
             role: 2,
-            status: 1
+            status: 1,
+            linkedLandlords: [landlordId]
         });
         const savedTenant = await newTenant.save();
 
-        // 2. Tạo Hợp đồng kết nối Khách với Phòng
-        // Mặc định cho hợp đồng kéo dài 1 năm kể từ startDate
-        const start = new Date(startDate);
-        const end = new Date(start);
-        end.setFullYear(end.getFullYear() + 1);
-
-        const newContract = new Contract({
-            roomId: room._id,
-            tenantId: savedTenant._id,
-            startDate: start,
-            endDate: end,
-            fixedRentPrice: room.defaultRentPrice, // Lấy giá mặc định của phòng
-            fixedDeposit: room.defaultDeposit,
-            status: 1 // Hiệu lực luôn
-        });
-        await newContract.save();
-
-        // 3. Đổi trạng thái phòng thành "Đang thuê" (1)
-        room.status = 1;
-        await room.save();
-
         res.status(201).json({
             success: true,
-            message: "Thêm khách thuê và gán phòng thành công!",
+            message: "Đã tạo tài khoản và thêm vào danh sách khách thuê!",
             data: savedTenant
         });
     } catch (error) {
@@ -141,8 +138,11 @@ exports.getTenantById = async (req, res) => {
 // 4. Cập nhật thông tin khách thuê
 exports.updateTenant = async (req, res) => {
     try {
-        const { password } = req.body;
-        let updateData = { ...req.body };
+        const { password, name, fullName, citizenId, idCard, ...rest } = req.body;
+        let updateData = { ...rest };
+        
+        if (name || fullName) updateData.fullName = fullName || name;
+        if (citizenId || idCard) updateData.idCard = idCard || citizenId;
 
         if (password) {
             const salt = await bcrypt.genSalt(10);

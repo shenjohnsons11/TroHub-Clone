@@ -58,7 +58,9 @@ export default function HomeScreen({ refreshKey, onNavigate, onLogout }: Props) 
       <View style={styles.headerRow}>
         <View style={styles.header}>
           <Text style={styles.hello}>Xin chào Người thuê {homeData.tenantName}</Text>
-          <Text style={styles.room}>Phòng {homeData.room}</Text>
+          <Text style={styles.room}>
+            {homeData.room === "Chưa có phòng" ? "Chưa có phòng" : `Phòng ${homeData.room}`}
+          </Text>
         </View>
         <Pressable style={styles.logoutButton} onPress={onLogout}>
           <Ionicons name="log-out-outline" size={20} color={COLORS.red} />
