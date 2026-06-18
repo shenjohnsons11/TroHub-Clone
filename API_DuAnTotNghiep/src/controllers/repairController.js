@@ -4,8 +4,28 @@ const Contract = require('../models/Contract');
 // 1. Lấy danh sách yêu cầu sửa chữa (Dành cho Chủ trọ - Web)
 exports.getAllRequests = async (req, res) => {
     try {
+        let landlordId = null;
+        const authHeader = req.headers['authorization'];
+        if (authHeader && authHeader.startsWith('Bearer ')) {
+            const token = authHeader.split(' ')[1];
+            try {
+                const decoded = require('jsonwebtoken').verify(token, process.env.JWT_SECRET || 'trohub_secret_key_2026');
+                if (decoded.role === 1) landlordId = decoded.id;
+            } catch(e) {}
+        }
+        
+        let query = {};
+        if (landlordId) {
+            const Room = require('../models/Room');
+            const rooms = await Room.find({ landlordId }).select('_id');
+            const roomIds = rooms.map(r => r._id);
+            const contracts = await Contract.find({ roomId: { $in: roomIds } }).select('_id');
+            const contractIds = contracts.map(c => c._id);
+            query.contractId = { $in: contractIds };
+        }
+
         // Dùng populate để kéo thông tin phòng (roomCode) và người gửi (fullName, phone) qua Hợp đồng
-        const requests = await RepairRequest.find()
+        const requests = await RepairRequest.find(query)
             .populate({
                 path: 'contractId',
                 populate: [

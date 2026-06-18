@@ -3,8 +3,16 @@ const Room = require('../models/Room');
 // 1. Lấy danh sách toàn bộ phòng (Có thể lọc theo mã chủ trọ)
 exports.getAllRooms = async (req, res) => {
     try {
-        // Hỗ trợ truyền ?landlordId=... trên URL để lọc phòng của riêng chủ trọ đó
-        const { landlordId } = req.query;
+        let landlordId = req.query.landlordId;
+        const authHeader = req.headers['authorization'];
+        if (!landlordId && authHeader && authHeader.startsWith('Bearer ')) {
+            const token = authHeader.split(' ')[1];
+            try {
+                const decoded = require('jsonwebtoken').verify(token, process.env.JWT_SECRET || 'trohub_secret_key_2026');
+                if (decoded.role === 1) landlordId = decoded.id;
+            } catch(e) {}
+        }
+        
         let query = {};
         if (landlordId) query.landlordId = landlordId;
 

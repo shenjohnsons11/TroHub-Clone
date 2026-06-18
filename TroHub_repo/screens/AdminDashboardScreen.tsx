@@ -4,12 +4,15 @@ import { Ionicons } from "@expo/vector-icons";
 import { COLORS } from "../constants/theme";
 import { adminService, AdminDashboardStats } from "../services/adminService";
 
+import { UserProfile } from "../types/UserProfile";
+
 type Props = {
+  profile?: UserProfile;
   onNavigate: (tab: any) => void;
   onLogout: () => void;
 };
 
-export default function AdminDashboardScreen({ onNavigate, onLogout }: Props) {
+export default function AdminDashboardScreen({ profile, onNavigate, onLogout }: Props) {
   const [stats, setStats] = useState<AdminDashboardStats | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -60,8 +63,8 @@ export default function AdminDashboardScreen({ onNavigate, onLogout }: Props) {
     >
       <View style={styles.headerRow}>
         <View style={styles.header}>
-          <Text style={styles.title}>Tổng quan TroHub</Text>
-          <Text style={styles.subtitle}>Báo cáo quản lý phòng trọ</Text>
+          <Text style={styles.title}>Xin chào Chủ trọ {profile?.name || "Admin"}</Text>
+          <Text style={styles.subtitle}>Tổng quan quản lý phòng trọ</Text>
         </View>
         <Pressable style={styles.logoutButton} onPress={onLogout}>
           <Ionicons name="log-out-outline" size={22} color={COLORS.red} />

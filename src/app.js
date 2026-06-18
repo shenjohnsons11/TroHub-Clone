@@ -356,6 +356,7 @@ const renderAdminShell = (title, content, action = "Tạo hóa đơn") => `
         <div class="topbar-actions">
           <div class="search wide"><input type="text" placeholder="🔍 Tìm kiếm phòng, khách, hóa đơn..." value="${state.searchQuery}" data-global-search /></div>
           ${button(action, action.includes("phòng") ? "add-room" : action.includes("biểu đồ") ? "export-revenue-chart" : "create-invoice")}
+          <span style="font-weight: 500; margin-left: 10px; color: var(--primary);">Xin chào Chủ trọ ${state.user?.fullName || state.user?.username || ''}</span>
           <button class="icon-btn">N</button>
           <div class="avatar">A</div>
         </div>
@@ -1076,7 +1077,7 @@ const renderTenantShell = (title, content) => {
         <header class="topbar">
           <div>
             <h1>${title}</h1>
-            <p>Xin chào, ${tenant.name || state.user?.name || "Người thuê"} • Phòng ${tenant.room || "-"}</p>
+            <p>Xin chào Người thuê ${tenant.name || state.user?.fullName || state.user?.username || "Ẩn danh"} • Phòng ${tenant.room || "-"}</p>
           </div>
           <div class="topbar-actions">
             <div class="search">Hợp đồng, hóa đơn, sửa chữa...</div>

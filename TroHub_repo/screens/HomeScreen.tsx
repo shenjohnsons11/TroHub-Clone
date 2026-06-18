@@ -57,7 +57,7 @@ export default function HomeScreen({ refreshKey, onNavigate, onLogout }: Props) 
     >
       <View style={styles.headerRow}>
         <View style={styles.header}>
-          <Text style={styles.hello}>Xin chào, {homeData.tenantName}</Text>
+          <Text style={styles.hello}>Xin chào Người thuê {homeData.tenantName}</Text>
           <Text style={styles.room}>Phòng {homeData.room}</Text>
         </View>
         <Pressable style={styles.logoutButton} onPress={onLogout}>

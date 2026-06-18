@@ -43,7 +43,6 @@ exports.getAllInvoices = async (req, res) => {
 
         let query = {};
 
-        // Nếu là Tenant (role 2): Chỉ lấy hóa đơn thuộc hợp đồng của chính họ, và bỏ qua các hóa đơn nháp (status 0)
         if (userRole === 2 && userId) {
             const tenantContracts = await Contract.find({ tenantId: userId });
             const contractIds = tenantContracts.map(c => c._id);
@@ -58,6 +57,21 @@ exports.getAllInvoices = async (req, res) => {
             }
             
             query = { $or: queryConditions };
+        } else if (userRole === 1 && userId) {
+            const Room = require('../models/Room');
+            const rooms = await Room.find({ landlordId: userId }).select('_id roomCode');
+            const roomIds = rooms.map(r => r._id);
+            const roomCodes = rooms.map(r => r.roomCode);
+            const contracts = await Contract.find({ roomId: { $in: roomIds } }).select('_id');
+            const contractIds = contracts.map(c => c._id);
+            
+            // Lọc hóa đơn thuộc về hợp đồng của chủ trọ, HOẶC hóa đơn nháp (không có contractId) nhưng tên phòng thuộc chủ trọ
+            query = {
+                $or: [
+                    { contractId: { $in: contractIds } },
+                    { room: { $in: roomCodes } }
+                ]
+            };
         }
 
         // Dùng populate 2 tầng để lấy tên phòng và tên người thuê từ Hợp đồng

@@ -127,6 +127,7 @@ export default function App() {
             <>
               {activeTab === "home" && (
                 <AdminDashboardScreen
+                  profile={profile}
                   onNavigate={(screen) => setActiveTab(screen)}
                   onLogout={handleLogout}
                 />

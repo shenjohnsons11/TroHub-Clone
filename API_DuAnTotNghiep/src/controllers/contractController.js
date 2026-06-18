@@ -4,7 +4,23 @@ const Room = require('../models/Room');
 // 1. Lấy danh sách toàn bộ hợp đồng (Chủ trọ xem trên Web)
 exports.getAllContracts = async (req, res) => {
     try {
-        const contracts = await Contract.find()
+        let landlordId = null;
+        const authHeader = req.headers['authorization'];
+        if (authHeader && authHeader.startsWith('Bearer ')) {
+            const token = authHeader.split(' ')[1];
+            try {
+                const decoded = require('jsonwebtoken').verify(token, process.env.JWT_SECRET || 'trohub_secret_key_2026');
+                if (decoded.role === 1) landlordId = decoded.id;
+            } catch(e) {}
+        }
+        
+        let query = {};
+        if (landlordId) {
+            const rooms = await Room.find({ landlordId }).select('_id');
+            query.roomId = { $in: rooms.map(r => r._id) };
+        }
+
+        const contracts = await Contract.find(query)
             .populate('roomId', 'roomCode area')
             .populate('tenantId', 'fullName phone')
             .populate('services.serviceId', 'name unit type defaultPrice')

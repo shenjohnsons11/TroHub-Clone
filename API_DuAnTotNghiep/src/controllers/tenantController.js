@@ -12,15 +12,33 @@ const bcrypt = require('bcryptjs');
 // 1. Lấy danh sách toàn bộ khách thuê (role = 2)
 exports.getAllTenants = async (req, res) => {
     try {
-        const tenants = await Account.find({ role: 2 }).lean().sort({ createdAt: -1 });
+        let landlordId = null;
+        const authHeader = req.headers['authorization'];
+        if (authHeader && authHeader.startsWith('Bearer ')) {
+            const token = authHeader.split(' ')[1];
+            try {
+                const decoded = require('jsonwebtoken').verify(token, process.env.JWT_SECRET || 'trohub_secret_key_2026');
+                if (decoded.role === 1) landlordId = decoded.id;
+            } catch(e) {}
+        }
+        
+        let tenants = await Account.find({ role: 2 }).lean().sort({ createdAt: -1 });
         
         // Populate room from active contracts (1: Hiệu lực, 5: Yêu cầu trả phòng)
-        const activeContracts = await Contract.find({ status: { $in: [1, 5] } }).populate('roomId', 'roomCode');
+        const activeContracts = await Contract.find({ status: { $in: [1, 5] } }).populate('roomId');
+        
+        if (landlordId) {
+            const landlordRooms = await Room.find({ landlordId }).select('_id');
+            const roomIds = landlordRooms.map(r => r._id.toString());
+            const validContracts = activeContracts.filter(c => c.roomId && roomIds.includes(c.roomId._id.toString()));
+            const validTenantIds = validContracts.map(c => c.tenantId.toString());
+            tenants = tenants.filter(t => validTenantIds.includes(t._id.toString()));
+        }
         
         for (let t of tenants) {
             const contract = activeContracts.find(c => c.tenantId && c.tenantId.toString() === t._id.toString());
             if (contract && contract.roomId) {
-                t.room = contract.roomId.roomCode;
+                t.room = contract.roomId.roomCode || contract.roomId.name;
                 t.contractStatus = contract.status;
             }
         }
