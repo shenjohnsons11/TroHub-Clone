@@ -12,3 +12,14 @@ API_DuAnTotNghiep/node_modules/
 API_DuAnTotNghiep/.env
 .agents
 .gemini
+
+# Agent files
+skills-lock.json
+MEMORY.md
+CHANGES_NOTE.md
+STABLE_VERSION_NOTES.md
+LOGIC_CAP_NHAT.md
+use_case_mermaid.txt
+plantuml_encode.py
+GEMINI.md
+
