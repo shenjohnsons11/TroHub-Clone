@@ -5,6 +5,12 @@ const invoiceController = require('../controllers/invoiceController');
 // Lấy danh sách hóa đơn (Web)
 router.get('/', invoiceController.getAllInvoices);
 
+// Lấy danh sách xem trước lập hóa đơn hàng loạt
+router.get('/bulk-preview', invoiceController.getBulkPreview);
+
+// Tạo hóa đơn hàng loạt
+router.post('/bulk', invoiceController.createBulkInvoices);
+
 // Chủ trọ xuất hóa đơn mới
 router.post('/', invoiceController.createInvoice);
 

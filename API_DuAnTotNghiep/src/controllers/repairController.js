@@ -33,7 +33,8 @@ exports.getAllRequests = async (req, res) => {
                     { path: 'tenantId', select: 'fullName phone' }
                 ]
             })
-            .sort({ createdAt: -1 }); // Mới nhất lên đầu
+            .sort({ createdAt: -1 })
+            .allowDiskUse(true); // Mới nhất lên đầu
 
         // Map để frontend dễ hiển thị
         const data = requests.map(r => ({
@@ -71,6 +72,7 @@ exports.createRequest = async (req, res) => {
         }
 
         let imagesArray = [];
+        console.log("REPAIR_CONTROLLER: Received images typeof:", typeof req.body.images, "isArray:", Array.isArray(req.body.images));
         if (Array.isArray(req.body.images)) {
             imagesArray = req.body.images.map(img => {
                 if (typeof img === 'string') return img;
@@ -83,7 +85,7 @@ exports.createRequest = async (req, res) => {
             contractId: activeContract._id,
             title,
             content,
-            priority: priority || 2, // Mặc định là 2 (Mức độ Vừa) nếu App không gửi
+            priority: 0, // Mặc định là 0 (Chưa phân loại) để Admin là người quyết định
             status: 0, // 0: Chờ xác nhận
             images: imagesArray
         });
@@ -107,7 +109,7 @@ exports.updateRequestStatus = async (req, res) => {
 
         // Map string → number nếu frontend gửi string
         const statusMap = { 'Mới': 0, 'Đang xử lý': 1, 'Đã hoàn thành': 2, 'Hoàn thành': 2, 'Đã hủy': 3 };
-        const priorityMap = { 'Thấp': 1, 'Trung bình': 2, 'Cao': 3 };
+        const priorityMap = { 'Chưa phân loại': 0, 'Thấp': 1, 'Trung bình': 2, 'Cao': 3 };
 
         const statusNum = typeof status === 'string' ? (statusMap[status] !== undefined ? statusMap[status] : parseInt(status)) : status;
         const priorityNum = typeof priority === 'string' ? (priorityMap[priority] !== undefined ? priorityMap[priority] : parseInt(priority)) : priority;
@@ -116,6 +118,11 @@ exports.updateRequestStatus = async (req, res) => {
         if (statusNum !== undefined && !isNaN(statusNum)) updateData.status = statusNum;
         if (priorityNum !== undefined && !isNaN(priorityNum)) updateData.priority = priorityNum;
         if (note !== undefined) updateData.landlordNote = note;
+
+        // Tự động giải phóng dung lượng (xóa ảnh) khi Yêu cầu được đánh dấu Hoàn thành (2) hoặc Đã hủy (3)
+        if (statusNum === 2 || statusNum === 3) {
+            updateData.images = [];
+        }
 
         const updatedRequest = await RepairRequest.findByIdAndUpdate(
             req.params.id,
@@ -140,5 +147,18 @@ exports.updateRequestStatus = async (req, res) => {
         });
     } catch (error) {
         res.status(500).json({ success: false, message: "Lỗi khi cập nhật: " + error.message });
+    }
+};
+
+// 4. Xóa yêu cầu sửa chữa
+exports.deleteRequest = async (req, res) => {
+    try {
+        const deletedRequest = await RepairRequest.findByIdAndDelete(req.params.id);
+        if (!deletedRequest) {
+            return res.status(404).json({ success: false, message: "Không tìm thấy yêu cầu sửa chữa này!" });
+        }
+        res.status(200).json({ success: true, message: "Đã xóa yêu cầu sửa chữa thành công!" });
+    } catch (error) {
+        res.status(500).json({ success: false, message: "Lỗi khi xóa: " + error.message });
     }
 };

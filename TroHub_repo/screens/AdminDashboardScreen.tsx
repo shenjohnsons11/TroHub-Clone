@@ -8,7 +8,7 @@ import { UserProfile } from "../types/UserProfile";
 
 type Props = {
   profile?: UserProfile;
-  onNavigate: (tab: any) => void;
+  onNavigate: (tab: any, params?: any) => void;
   onLogout: () => void;
 };
 
@@ -63,7 +63,7 @@ export default function AdminDashboardScreen({ profile, onNavigate, onLogout }: 
     >
       <View style={styles.headerRow}>
         <View style={styles.header}>
-          <Text style={styles.title}>Xin chào Chủ trọ {profile?.name || "Admin"}</Text>
+          <Text style={styles.title}>Xin chào Chủ trọ {(profile as any)?.fullName || (profile as any)?.name || "Admin"}</Text>
           <Text style={styles.subtitle}>Tổng quan quản lý phòng trọ</Text>
         </View>
         <Pressable style={styles.logoutButton} onPress={onLogout}>
@@ -116,17 +116,17 @@ export default function AdminDashboardScreen({ profile, onNavigate, onLogout }: 
       {/* Lối tắt nhanh */}
       <Text style={styles.sectionTitle}>Lối tắt nhanh</Text>
       <View style={styles.actionGrid}>
-        <Pressable style={styles.actionButton} onPress={() => onNavigate("rooms")}>
+        <Pressable style={styles.actionButton} onPress={() => onNavigate("rooms", { action: "create" })}>
           <Ionicons name="add-circle-outline" size={26} color={COLORS.orange} />
           <Text style={styles.actionText}>Thêm phòng</Text>
         </Pressable>
 
-        <Pressable style={styles.actionButton} onPress={() => onNavigate("contract")}>
+        <Pressable style={styles.actionButton} onPress={() => onNavigate("contract", { action: "create" })}>
           <Ionicons name="document-text-outline" size={26} color={COLORS.orange} />
           <Text style={styles.actionText}>Tạo hợp đồng</Text>
         </Pressable>
 
-        <Pressable style={styles.actionButton} onPress={() => onNavigate("invoice")}>
+        <Pressable style={styles.actionButton} onPress={() => onNavigate("invoice", { action: "create" })}>
           <Ionicons name="receipt-outline" size={26} color={COLORS.orange} />
           <Text style={styles.actionText}>Tạo hóa đơn</Text>
         </Pressable>

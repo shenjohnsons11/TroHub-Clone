@@ -89,13 +89,22 @@ exports.createTenant = async (req, res) => {
             });
         }
 
-        // Nếu khách chưa tồn tại trên hệ thống, yêu cầu phải có SĐT để tạo tài khoản mới
-        if (!phone) {
-            return res.status(400).json({ success: false, message: "Khách này chưa có trên hệ thống, vui lòng nhập SĐT để tạo mới!" });
+        // Nếu khách chưa tồn tại trên hệ thống, yêu cầu phải có ĐỦ SĐT và CCCD để tạo tài khoản mới
+        if (!phone || phone.length !== 10) {
+            return res.status(400).json({ success: false, message: "Khách mới chưa có tài khoản. Vui lòng nhập đúng SĐT gồm 10 chữ số!" });
+        }
+        if (!finalIdCard || finalIdCard.length !== 12) {
+            return res.status(400).json({ success: false, message: "Khách mới chưa có tài khoản. Vui lòng nhập đúng CCCD gồm 12 chữ số!" });
+        }
+        
+        // Kiểm tra định dạng email bắt buộc phải hợp lệ (có @ và đuôi) vì hệ thống dùng email làm tên đăng nhập
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        if (!email || !emailRegex.test(email)) {
+            return res.status(400).json({ success: false, message: "Vui lòng nhập Email đúng định dạng (ví dụ: nguyenvanA@gmail.com) để làm tên đăng nhập!" });
         }
 
-        // Nếu khách chưa tồn tại, tạo mật khẩu mặc định là "123456"
-        const defaultPassword = "123456";
+        // Sử dụng mật khẩu được truyền lên từ Frontend, nếu không có thì mặc định là "123456"
+        const defaultPassword = password || "123456";
 
         // Tạo tài khoản khách thuê mới
         const salt = await bcrypt.genSalt(10);
@@ -114,9 +123,29 @@ exports.createTenant = async (req, res) => {
         });
         const savedTenant = await newTenant.save();
 
+        let contractMsg = "";
+        // 3. Tạo hợp đồng nháp nếu có chọn phòng
+        if (roomCode) {
+            const room = await Room.findOne({ roomCode, landlordId });
+            if (room && room.status === 0) { // Chỉ tạo nếu phòng trống
+                const newContract = new Contract({
+                    roomId: room._id,
+                    tenantId: savedTenant._id,
+                    startDate: startDate || new Date(),
+                    endDate: new Date(new Date().setFullYear(new Date().getFullYear() + 1)), // Mặc định 1 năm
+                    fixedRentPrice: room.rentPrice || 0,
+                    fixedDeposit: room.deposit || 0,
+                    services: [],
+                    status: 0 // Hợp đồng nháp / Chờ ký
+                });
+                await newContract.save();
+                contractMsg = " và đã tạo hợp đồng nháp";
+            }
+        }
+
         res.status(201).json({
             success: true,
-            message: "Đã tạo tài khoản và thêm vào danh sách khách thuê!",
+            message: `Đã tạo tài khoản${contractMsg} thành công!`,
             data: savedTenant
         });
     } catch (error) {

@@ -206,6 +206,12 @@ export const adminService = {
     return response.data;
   },
 
+  async deleteRepair(repairId: string): Promise<boolean> {
+    const token = await authService.getToken();
+    const response = await apiClient.delete<{ success: boolean }>(`/repairs/${repairId}`, token);
+    return response.success;
+  },
+
   async getDashboardStats(): Promise<AdminDashboardStats> {
     try {
       const [rooms, tenants, repairs, invoices] = await Promise.all([

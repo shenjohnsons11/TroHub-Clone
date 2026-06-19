@@ -3,8 +3,11 @@ import { View, Text, StyleSheet, FlatList, Pressable, TextInput, Modal, Activity
 import { Ionicons } from "@expo/vector-icons";
 import { COLORS } from "../constants/theme";
 import { adminService, AdminContract, AdminRoom, AdminTenant } from "../services/adminService";
+type Props = {
+  params?: any;
+};
 
-export default function AdminContractsScreen() {
+export default function AdminContractsScreen({ params }: Props) {
   const [contracts, setContracts] = useState<AdminContract[]>([]);
   const [rooms, setRooms] = useState<AdminRoom[]>([]);
   const [tenants, setTenants] = useState<AdminTenant[]>([]);
@@ -12,7 +15,7 @@ export default function AdminContractsScreen() {
   const [filter, setFilter] = useState<"all" | "pending" | "active">("all");
 
   // Modal states for creating contract
-  const [modalVisible, setModalVisible] = useState(false);
+  const [modalVisible, setModalVisible] = useState(params?.action === "create");
   const [selectedRoomId, setSelectedRoomId] = useState("");
   const [selectedTenantId, setSelectedTenantId] = useState("");
   const [fixedRent, setFixedRent] = useState("");
@@ -210,7 +213,7 @@ export default function AdminContractsScreen() {
             <View style={styles.contractCard}>
               <View style={styles.contractInfo}>
                 <Text style={styles.roomCode}>Phòng {roomCode}</Text>
-                <Text style={styles.tenantName}>Khách thuê: {tenantName} ({tenantPhone})</Text>
+                <Text style={styles.tenantName}>Khách thuê: {tenantName} ({tenantPhone !== "N/A" ? String(tenantPhone).replace(/\D/g, "").replace(/(\d{4})(\d{3})(\d+)/, "$1.$2.$3").replace(/(\d{4})(\d+)/, "$1.$2") : "N/A"})</Text>
                 <Text style={styles.contractDates}>
                   Thời hạn: {item.startDate ? new Date(item.startDate).toLocaleDateString("vi-VN") : ""} - {item.endDate ? new Date(item.endDate).toLocaleDateString("vi-VN") : ""}
                 </Text>

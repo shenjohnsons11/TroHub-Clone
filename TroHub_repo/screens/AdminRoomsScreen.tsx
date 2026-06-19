@@ -3,14 +3,17 @@ import { View, Text, StyleSheet, FlatList, Pressable, TextInput, Modal, Activity
 import { Ionicons } from "@expo/vector-icons";
 import { COLORS } from "../constants/theme";
 import { adminService, AdminRoom } from "../services/adminService";
+type Props = {
+  params?: any;
+};
 
-export default function AdminRoomsScreen() {
+export default function AdminRoomsScreen({ params }: Props) {
   const [rooms, setRooms] = useState<AdminRoom[]>([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<"all" | "empty" | "occupied" | "repair">("all");
   
   // Modal states for adding room
-  const [modalVisible, setModalVisible] = useState(false);
+  const [modalVisible, setModalVisible] = useState(params?.action === "create");
   const [roomCode, setRoomCode] = useState("");
   const [area, setArea] = useState("");
   const [rentPrice, setRentPrice] = useState("");

@@ -16,6 +16,7 @@ import AdminContractsScreen from "../screens/AdminContractsScreen";
 import AdminInvoicesScreen from "../screens/AdminInvoicesScreen";
 import AdminRepairsScreen from "../screens/AdminRepairsScreen";
 import AdminTenantsScreen from "../screens/AdminTenantsScreen";
+import BulkInvoiceScreen from "../screens/BulkInvoiceScreen";
 
 import { UserProfile } from "../types/UserProfile";
 import { authService } from "../services/authService";
@@ -24,6 +25,7 @@ import { userService } from "../services/userService";
 type Tab =
   | "home"
   | "invoice"
+  | "invoice_bulk"
   | "repair"
   | "contract"
   | "account"
@@ -36,6 +38,7 @@ export default function App() {
   const [isChecking, setIsChecking] = useState(true);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [activeTab, setActiveTab] = useState<Tab>("home");
+  const [actionParams, setActionParams] = useState<any>(null);
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [homeRefreshKey, setHomeRefreshKey] = useState(0);
 
@@ -99,11 +102,11 @@ export default function App() {
     }
   };
 
-  const handleChangeTab = (tab: Tab) => {
+  const handleChangeTab = (tab: Tab, params?: any) => {
     if (tab === "home") {
       setHomeRefreshKey((prev) => prev + 1);
     }
-
+    setActionParams(params || null);
     setActiveTab(tab);
   };
 
@@ -128,16 +131,18 @@ export default function App() {
               {activeTab === "home" && (
                 <AdminDashboardScreen
                   profile={profile}
-                  onNavigate={(screen) => setActiveTab(screen)}
+                  onNavigate={handleChangeTab}
                   onLogout={handleLogout}
                 />
               )}
 
-              {activeTab === "rooms" && <AdminRoomsScreen />}
+              {activeTab === "rooms" && <AdminRoomsScreen params={actionParams} />}
 
-              {activeTab === "contract" && <AdminContractsScreen />}
+              {activeTab === "contract" && <AdminContractsScreen params={actionParams} />}
 
-              {activeTab === "invoice" && <AdminInvoicesScreen />}
+              {activeTab === "invoice" && <AdminInvoicesScreen params={actionParams} onNavigate={handleChangeTab} />}
+
+              {activeTab === "invoice_bulk" && <BulkInvoiceScreen onNavigate={handleChangeTab} />}
 
               {activeTab === "repair" && <AdminRepairsScreen />}
 

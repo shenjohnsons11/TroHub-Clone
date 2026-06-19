@@ -6,6 +6,138 @@ const jwt = require('jsonwebtoken');
 const JWT_SECRET = process.env.JWT_SECRET || 'trohub_secret_key_2026';
 const Account = require('../models/Account');
 
+// Lấy dữ liệu xem trước để lập hóa đơn hàng loạt
+exports.getBulkPreview = async (req, res) => {
+    try {
+        const authHeader = req.headers['authorization'];
+        let userId = null;
+        if (authHeader && authHeader.startsWith('Bearer ')) {
+            const token = authHeader.split(' ')[1];
+            try {
+                const decoded = jwt.verify(token, JWT_SECRET);
+                userId = decoded.id;
+            } catch (e) {}
+        }
+        if (!userId) return res.status(401).json({ success: false, message: 'Chưa đăng nhập' });
+
+        const Room = require('../models/Room');
+        const rooms = await Room.find({ landlordId: userId });
+        const roomIds = rooms.map(r => r._id);
+
+        const contracts = await Contract.find({ roomId: { $in: roomIds }, status: 1 })
+            .populate('roomId', 'roomCode')
+            .populate('tenantId', 'fullName phone')
+            .populate('services.serviceId', 'name type');
+
+        const previewList = [];
+
+        for (const contract of contracts) {
+            const previousInvoice = await Invoice.findOne({ contractId: contract._id }).sort({ createdAt: -1 });
+            
+            const roomAmount = contract.fixedRentPrice || 0;
+            
+            let electricityOld = 0;
+            let waterOld = 0;
+            let electricityPrice = 0;
+            let waterPrice = 0;
+            let servicesTotal = 0;
+
+            for (const item of contract.services) {
+                const service = item.serviceId;
+                if (!service) continue;
+                if (service.type === 1) {
+                    if (service.name.toLowerCase().includes('điện')) {
+                        electricityPrice = item.fixedPrice || 0;
+                        if (previousInvoice) electricityOld = previousInvoice.electricityNew || 0;
+                    } else if (service.name.toLowerCase().includes('nước')) {
+                        waterPrice = item.fixedPrice || 0;
+                        if (previousInvoice) waterOld = previousInvoice.waterNew || 0;
+                    }
+                } else {
+                    servicesTotal += item.fixedPrice || 0;
+                }
+            }
+
+            previewList.push({
+                contractId: contract._id,
+                room: contract.roomId.roomCode,
+                tenant: contract.tenantId.fullName,
+                roomAmount: roomAmount,
+                electricityOld: electricityOld,
+                electricityPrice: electricityPrice,
+                waterOld: waterOld,
+                waterPrice: waterPrice,
+                services: servicesTotal
+            });
+        }
+
+        res.status(200).json({ success: true, data: previewList });
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+
+// Tạo hóa đơn hàng loạt
+exports.createBulkInvoices = async (req, res) => {
+    try {
+        const { invoices, period, dueDate } = req.body;
+        if (!invoices || !Array.isArray(invoices)) {
+            return res.status(400).json({ success: false, message: "Dữ liệu hóa đơn không hợp lệ" });
+        }
+
+        const createdInvoices = [];
+
+        for (const data of invoices) {
+            const electricityOld = Number(data.electricityOld) || 0;
+            const electricityNew = Number(data.electricityNew) || 0;
+            const electricityPrice = Number(data.electricityPrice) || 0;
+            const electricityAmount = Math.max(0, electricityNew - electricityOld) * electricityPrice;
+
+            const waterOld = Number(data.waterOld) || 0;
+            const waterNew = Number(data.waterNew) || 0;
+            const waterPrice = Number(data.waterPrice) || 0;
+            const waterAmount = Math.max(0, waterNew - waterOld) * waterPrice;
+
+            const roomAmount = Number(data.roomAmount) || 0;
+            const services = Number(data.services) || 0;
+            const discount = Number(data.discount) || 0;
+            const totalAmount = roomAmount + electricityAmount + waterAmount + services - discount;
+
+            let resolvedPeriod = period;
+            if (!resolvedPeriod) {
+                const d = new Date();
+                resolvedPeriod = `${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`;
+            }
+
+            const newInvoice = new Invoice({
+                contractId: data.contractId || null,
+                period: resolvedPeriod,
+                dueDate: dueDate ? new Date(dueDate) : new Date(),
+                totalAmount: Math.max(0, totalAmount),
+                status: 1, // Chưa thanh toán
+                room: data.room || "",
+                tenant: data.tenant || "",
+                roomAmount,
+                electricityOld,
+                electricityNew,
+                electricity: electricityAmount,
+                waterOld,
+                waterNew,
+                water: waterAmount,
+                services,
+                discount
+            });
+
+            await newInvoice.save();
+            createdInvoices.push(newInvoice);
+        }
+
+        res.status(201).json({ success: true, message: `Đã tạo thành công ${createdInvoices.length} hóa đơn!`, data: createdInvoices });
+    } catch (error) {
+        res.status(500).json({ success: false, message: "Lỗi tạo hóa đơn hàng loạt: " + error.message });
+    }
+};
+
 exports.remindInvoice = async (req, res) => {
     try {
         const invoice = await Invoice.findById(req.params.id);
@@ -44,19 +176,14 @@ exports.getAllInvoices = async (req, res) => {
         let query = {};
 
         if (userRole === 2 && userId) {
-            const tenantContracts = await Contract.find({ tenantId: userId });
-            const contractIds = tenantContracts.map(c => c._id);
-            const tenantAccount = await Account.findById(userId);
+            const tenantContracts = await Contract.find({ tenantId: userId }).sort({ createdAt: -1 });
+            // Chỉ lấy hóa đơn của hợp đồng hiện tại (đang thuê hoặc chờ ký), ẩn lịch sử hợp đồng cũ
+            const activeContract = tenantContracts.find(c => c.status === 1 || c.status === 0 || c.status === 4);
+            const currentContractIds = activeContract ? [activeContract._id] : [];
             
-            const queryConditions = [
-                { contractId: { $in: contractIds }, status: { $ne: 0 } }
-            ];
-            
-            if (tenantAccount && tenantAccount.roomCode) {
-                queryConditions.push({ room: tenantAccount.roomCode, status: { $ne: 0 } });
-            }
-            
-            query = { $or: queryConditions };
+            // XÓA BỎ logic lấy hóa đơn theo tên phòng (roomCode) vì sẽ lấy nhầm hóa đơn của khách cũ!
+            // Chỉ lấy hóa đơn gắn chính xác với contractId HIỆN TẠI của người thuê này.
+            query = { contractId: { $in: currentContractIds }, status: { $ne: 0 } };
         } else if (userRole === 1 && userId) {
             const Room = require('../models/Room');
             const rooms = await Room.find({ landlordId: userId }).select('_id roomCode');

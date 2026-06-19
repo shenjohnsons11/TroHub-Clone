@@ -11,6 +11,7 @@ import {
   Image,
 } from "react-native";
 import * as ImagePicker from "expo-image-picker";
+import { Ionicons } from "@expo/vector-icons";
 import Card from "../components/Card";
 import { COLORS } from "../constants/theme";
 import {
@@ -33,6 +34,9 @@ export default function RepairScreen() {
 
   const [requests, setRequests] = useState<RepairRequest[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  
+  // Selection state
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
 
   useEffect(() => {
     loadRequests();
@@ -153,19 +157,77 @@ export default function RepairScreen() {
   };
 
   const handleDelete = async (id: string) => {
-    try {
-      const updatedRequests = await repairService.deleteRequest(id);
-      setRequests(updatedRequests);
-    } catch (error) {
-      console.log("Lỗi xóa yêu cầu:", error);
-      Alert.alert("Lỗi", "Không thể xóa yêu cầu sửa chữa");
+    Alert.alert(
+      "Xác nhận xóa",
+      "Bạn có chắc chắn muốn xóa yêu cầu này không?",
+      [
+        { text: "Hủy", style: "cancel" },
+        {
+          text: "Xóa",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              setIsLoading(true);
+              await repairService.deleteRequest(id);
+              loadRequests();
+            } catch (error) {
+              console.log("Lỗi xóa yêu cầu:", error);
+              Alert.alert("Lỗi", "Không thể xóa yêu cầu sửa chữa");
+              setIsLoading(false);
+            }
+          }
+        }
+      ]
+    );
+  };
+
+  const toggleSelection = (id: string) => {
+    setSelectedIds(prev => 
+      prev.includes(id) ? prev.filter(item => item !== id) : [...prev, id]
+    );
+  };
+
+  const toggleAll = () => {
+    if (selectedIds.length === requests.length && requests.length > 0) {
+      setSelectedIds([]);
+    } else {
+      setSelectedIds(requests.map(r => r.id));
     }
+  };
+
+  const handleBulkDelete = () => {
+    if (selectedIds.length === 0) return;
+    Alert.alert(
+      "Xác nhận xóa",
+      `Bạn có chắc chắn muốn xóa ${selectedIds.length} yêu cầu đã chọn không?`,
+      [
+        { text: "Hủy", style: "cancel" },
+        { 
+          text: "Xóa", 
+          style: "destructive",
+          onPress: async () => {
+            try {
+              setIsLoading(true);
+              const promises = selectedIds.map(id => repairService.deleteRequest(id));
+              await Promise.all(promises);
+              Alert.alert("Thành công", `Đã xóa ${selectedIds.length} yêu cầu!`);
+              setSelectedIds([]);
+              loadRequests();
+            } catch (error) {
+              Alert.alert("Lỗi", "Không thể xóa một số yêu cầu.");
+              setIsLoading(false);
+            }
+          }
+        }
+      ]
+    );
   };
 
   const getPriorityStyle = (value?: Priority) => {
     if (value === "Cao") return styles.priorityHigh;
+    if (value === "Trung bình") return styles.priorityMedium;
     if (value === "Thấp") return styles.priorityLow;
-    return styles.priorityMedium;
+    return styles.priorityNone;
   };
 
   const getStatusText = (status: RepairStatus) => {
@@ -290,22 +352,55 @@ export default function RepairScreen() {
 
       <Text style={styles.historyTitle}>Yêu cầu đã gửi</Text>
 
+      {/* Hành động hàng loạt */}
+      {selectedIds.length > 0 && (
+        <View style={styles.bulkActionContainer}>
+          <Text style={styles.bulkText}>Đã chọn {selectedIds.length}</Text>
+          <Pressable style={styles.bulkDeleteButton} onPress={handleBulkDelete}>
+            <Ionicons name="trash-outline" size={16} color="#FFF" />
+            <Text style={styles.bulkDeleteText}>Xóa tất cả</Text>
+          </Pressable>
+        </View>
+      )}
+
+      {/* Tùy chọn chọn tất cả */}
+      {requests.length > 0 && (
+        <Pressable style={styles.selectAllContainer} onPress={toggleAll}>
+          <Ionicons 
+            name={selectedIds.length === requests.length ? "checkbox" : "square-outline"} 
+            size={22} 
+            color={selectedIds.length === requests.length ? COLORS.orange : COLORS.muted} 
+          />
+          <Text style={styles.selectAllText}>Chọn tất cả</Text>
+        </Pressable>
+      )}
+
       {requests.length === 0 ? (
         <Card style={styles.emptyCard}>
           <Text style={styles.emptyText}>Chưa có yêu cầu sửa chữa nào.</Text>
         </Card>
       ) : (
         requests.map((item) => (
-          <Card key={item.id} style={styles.requestCard}>
-            <View style={styles.requestHeader}>
-              <View style={styles.requestLeft}>
-                <Text style={styles.requestTitle}>{item.type}</Text>
+          <Pressable key={item.id} onLongPress={() => toggleSelection(item.id)}>
+            <Card style={[styles.requestCard, selectedIds.includes(item.id) && styles.requestCardSelected]}>
+              <View style={styles.requestHeader}>
+                <View style={styles.requestLeft}>
+                  <Pressable onPress={() => toggleSelection(item.id)} style={styles.checkboxArea}>
+                    <Ionicons 
+                      name={selectedIds.includes(item.id) ? "checkbox" : "square-outline"} 
+                      size={22} 
+                      color={selectedIds.includes(item.id) ? COLORS.orange : COLORS.muted} 
+                    />
+                  </Pressable>
+                  <View>
+                    <Text style={styles.requestTitle}>{item.type}</Text>
                 <Text style={styles.requestDate}>
                   Phòng {item.room} • {item.createdAt}
                 </Text>
-              </View>
+                  </View>
+                </View>
 
-              <View style={[styles.statusBadge, getStatusStyle(item.status)]}>
+                <View style={[styles.statusBadge, getStatusStyle(item.status)]}>
                 <Text style={styles.statusText}>
                   {getStatusText(item.status)}
                 </Text>
@@ -333,7 +428,8 @@ export default function RepairScreen() {
                 <Text style={styles.deleteText}>Xóa</Text>
               </Pressable>
             </View>
-          </Card>
+            </Card>
+          </Pressable>
         ))
       )}
     </ScrollView>
@@ -495,6 +591,47 @@ const styles = StyleSheet.create({
     color: COLORS.text,
     marginBottom: 12,
   },
+  bulkActionContainer: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 8,
+    backgroundColor: "#FFF0F0",
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    borderRadius: 8,
+  },
+  bulkText: {
+    color: COLORS.red,
+    fontWeight: "700",
+    fontSize: 14,
+  },
+  bulkDeleteButton: {
+    backgroundColor: COLORS.red,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 6,
+  },
+  bulkDeleteText: {
+    color: "#FFF",
+    fontWeight: "800",
+    fontSize: 13,
+  },
+  selectAllContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    marginBottom: 10,
+    paddingHorizontal: 4,
+  },
+  selectAllText: {
+    fontSize: 14,
+    color: COLORS.muted,
+    fontWeight: "600",
+  },
   emptyCard: {
     alignItems: "center",
   },
@@ -502,9 +639,16 @@ const styles = StyleSheet.create({
     color: COLORS.muted,
     fontSize: 13,
     fontWeight: "700",
+    textAlign: "center",
   },
   requestCard: {
     marginBottom: 12,
+    padding: 16,
+  },
+  requestCardSelected: {
+    backgroundColor: "#FFF5ED",
+    borderColor: COLORS.orange,
+    borderWidth: 1,
   },
   requestHeader: {
     flexDirection: "row",
@@ -512,7 +656,10 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   requestLeft: {
-    flex: 1,
+    gap: 8,
+  },
+  checkboxArea: {
+    padding: 2,
   },
   requestTitle: {
     fontSize: 15,
@@ -565,10 +712,13 @@ const styles = StyleSheet.create({
     backgroundColor: "#FFE8E8",
   },
   priorityMedium: {
-    backgroundColor: COLORS.orangeSoft,
+    backgroundColor: "rgba(245, 158, 11, 0.15)",
   },
   priorityLow: {
-    backgroundColor: "#EAFBEF",
+    backgroundColor: "rgba(16, 185, 129, 0.15)",
+  },
+  priorityNone: {
+    backgroundColor: "rgba(100, 116, 139, 0.15)",
   },
   priorityBadgeText: {
     color: COLORS.text,

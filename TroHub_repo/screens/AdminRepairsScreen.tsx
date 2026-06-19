@@ -16,6 +16,9 @@ export default function AdminRepairsScreen() {
   const [priority, setPriority] = useState<number>(1);
   const [landlordNote, setLandlordNote] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  
+  // Selection state
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
 
   const loadRepairs = async () => {
     try {
@@ -58,6 +61,48 @@ export default function AdminRepairsScreen() {
     } finally {
       setSubmitting(false);
     }
+  };
+
+  const toggleSelection = (id: string) => {
+    setSelectedIds(prev => 
+      prev.includes(id) ? prev.filter(item => item !== id) : [...prev, id]
+    );
+  };
+
+  const toggleAll = () => {
+    if (selectedIds.length === filteredRepairs.length && filteredRepairs.length > 0) {
+      setSelectedIds([]);
+    } else {
+      setSelectedIds(filteredRepairs.map(r => r._id));
+    }
+  };
+
+  const handleBulkDelete = () => {
+    if (selectedIds.length === 0) return;
+    Alert.alert(
+      "Xác nhận xóa",
+      `Bạn có chắc chắn muốn xóa vĩnh viễn ${selectedIds.length} yêu cầu đã chọn không?`,
+      [
+        { text: "Hủy", style: "cancel" },
+        { 
+          text: "Xóa", 
+          style: "destructive",
+          onPress: async () => {
+            try {
+              setLoading(true);
+              const promises = selectedIds.map(id => adminService.deleteRepair(id));
+              await Promise.all(promises);
+              Alert.alert("Thành công", `Đã xóa ${selectedIds.length} yêu cầu!`);
+              setSelectedIds([]);
+              loadRepairs();
+            } catch (error) {
+              Alert.alert("Lỗi", "Không thể xóa một số yêu cầu.");
+              setLoading(false);
+            }
+          }
+        }
+      ]
+    );
   };
 
   const getPriorityText = (p: number) => {
@@ -128,15 +173,52 @@ export default function AdminRepairsScreen() {
         </Pressable>
       </View>
 
+      {/* Hành động hàng loạt */}
+      {selectedIds.length > 0 && (
+        <View style={styles.bulkActionContainer}>
+          <Text style={styles.bulkText}>Đã chọn {selectedIds.length}</Text>
+          <Pressable style={styles.bulkDeleteButton} onPress={handleBulkDelete}>
+            <Ionicons name="trash-outline" size={16} color="#FFF" />
+            <Text style={styles.bulkDeleteText}>Xóa tất cả</Text>
+          </Pressable>
+        </View>
+      )}
+
+      {/* Tùy chọn chọn tất cả */}
+      {filteredRepairs.length > 0 && (
+        <Pressable style={styles.selectAllContainer} onPress={toggleAll}>
+          <Ionicons 
+            name={selectedIds.length === filteredRepairs.length ? "checkbox" : "square-outline"} 
+            size={22} 
+            color={selectedIds.length === filteredRepairs.length ? COLORS.orange : COLORS.muted} 
+          />
+          <Text style={styles.selectAllText}>Chọn tất cả</Text>
+        </Pressable>
+      )}
+
       <FlatList
         data={filteredRepairs}
         keyExtractor={(item) => item._id}
+        extraData={selectedIds}
         contentContainerStyle={styles.listContent}
         showsVerticalScrollIndicator={false}
         renderItem={({ item }) => (
-          <Pressable style={styles.repairCard} onPress={() => openEditModal(item)}>
+          <Pressable 
+            style={[styles.repairCard, selectedIds.includes(item._id) && styles.repairCardSelected]} 
+            onPress={() => openEditModal(item)}
+            onLongPress={() => toggleSelection(item._id)}
+          >
             <View style={styles.cardHeader}>
-              <Text style={styles.roomCode}>Phòng {item.contractId?.roomId?.roomCode || "N/A"}</Text>
+              <View style={styles.roomCodeContainer}>
+                <Pressable onPress={() => toggleSelection(item._id)} style={styles.checkboxArea}>
+                  <Ionicons 
+                    name={selectedIds.includes(item._id) ? "checkbox" : "square-outline"} 
+                    size={22} 
+                    color={selectedIds.includes(item._id) ? COLORS.orange : COLORS.muted} 
+                  />
+                </Pressable>
+                <Text style={styles.roomCode}>Phòng {item.contractId?.roomId?.roomCode || "N/A"}</Text>
+              </View>
               <View style={styles.badges}>
                 <View style={[styles.badge, { backgroundColor: getPriorityColor(item.priority) + "15" }]}>
                   <Text style={[styles.badgeText, { color: getPriorityColor(item.priority) }]}>
@@ -281,8 +363,50 @@ const styles = StyleSheet.create({
   filterContainer: {
     flexDirection: "row",
     paddingHorizontal: 18,
-    marginBottom: 10,
+    marginBottom: 6,
     gap: 8,
+  },
+  bulkActionContainer: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingHorizontal: 18,
+    marginBottom: 8,
+    backgroundColor: "#FFF0F0",
+    paddingVertical: 10,
+    marginHorizontal: 18,
+    borderRadius: 8,
+  },
+  bulkText: {
+    color: COLORS.red,
+    fontWeight: "700",
+    fontSize: 14,
+  },
+  bulkDeleteButton: {
+    backgroundColor: COLORS.red,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 6,
+  },
+  bulkDeleteText: {
+    color: "#FFF",
+    fontWeight: "800",
+    fontSize: 13,
+  },
+  selectAllContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    paddingHorizontal: 18,
+    marginBottom: 10,
+  },
+  selectAllText: {
+    fontSize: 14,
+    color: COLORS.muted,
+    fontWeight: "600",
   },
   filterButton: {
     paddingHorizontal: 12,
@@ -317,10 +441,23 @@ const styles = StyleSheet.create({
     shadowRadius: 6,
     elevation: 2,
   },
+  repairCardSelected: {
+    backgroundColor: "#FFF5ED",
+    borderColor: COLORS.orange,
+    borderWidth: 1,
+  },
   cardHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
+  },
+  roomCodeContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  checkboxArea: {
+    padding: 2,
   },
   roomCode: {
     fontSize: 15,

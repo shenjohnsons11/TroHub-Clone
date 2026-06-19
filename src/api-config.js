@@ -84,10 +84,11 @@ export const API_CONFIG = {
   // Yêu cầu sửa chữa
   MAP_REPAIR: (apiData) => ({
     id: apiData.repairCode || apiData._id || apiData.id || "",
+    objectId: apiData._id || apiData.id || "",
     room: apiData.room || "-",
     sender: apiData.sender || "-",
     category: apiData.title || apiData.category || "",
-    priority: ["", "Thấp", "Trung bình", "Cao"][apiData.priority] || "Thấp",
+    priority: ["Chưa phân loại", "Thấp", "Trung bình", "Cao"][apiData.priority] || "Chưa phân loại",
     priorityBy: "Admin",
     date: apiData.createdAt ? new Date(apiData.createdAt).toLocaleDateString("vi-VN") : "",
     status: ["Mới", "Đang xử lý", "Đã hoàn thành", "Đã hủy"][apiData.status] || "Mới",

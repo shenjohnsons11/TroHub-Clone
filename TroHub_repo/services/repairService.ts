@@ -39,14 +39,16 @@ type CreateRepairResponse = {
 
 const mapPriorityFromApi = (priority: number): Priority => {
   if (priority === 3) return "Cao";
+  if (priority === 2) return "Trung bình";
   if (priority === 1) return "Thấp";
-  return "Trung bình";
+  return "Chưa phân loại";
 };
 
 const mapPriorityToApi = (priority?: Priority): number => {
   if (priority === "Cao") return 3;
+  if (priority === "Trung bình") return 2;
   if (priority === "Thấp") return 1;
-  return 2;
+  return 0;
 };
 
 const mapStatusFromApi = (status: number): RepairStatus => {
@@ -159,13 +161,19 @@ export const repairService = {
     }
   },
 
-  async deleteRequest(id: string): Promise<RepairRequest[]> {
-    /**
-     * Backend hiện chưa có DELETE /api/repairs/:id.
-     * Tạm thời không xóa thật, chỉ load lại danh sách.
-     * Nếu muốn xóa thật thì cần thêm route DELETE ở backend.
-     */
-    console.log("Backend chưa hỗ trợ xóa yêu cầu sửa chữa:", id);
-    return await this.getRequests();
+  async deleteRequest(id: string): Promise<boolean> {
+    try {
+      const token = await authService.getToken();
+      if (!token) throw new Error("Không tìm thấy token");
+      const response = await apiClient.delete<{ success: boolean; message?: string }>(
+        `/me/repairs/${id}`,
+        token
+      );
+      if (!response.success) throw new Error(response.message || "Xóa thất bại");
+      return true;
+    } catch (error) {
+      console.log("Lỗi xóa yêu cầu:", error);
+      throw error;
+    }
   },
 };

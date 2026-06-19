@@ -43,12 +43,20 @@ exports.login = async (req, res) => {
     try {
         const { username, password } = req.body;
 
+        let searchUsername = username.trim();
+        let searchPhone = searchUsername;
+        
+        // Nếu tên đăng nhập không chứa '@', có thể người dùng đã nhập SĐT kèm dấu chấm hoặc khoảng trắng
+        if (!searchUsername.includes('@')) {
+            searchPhone = searchUsername.replace(/[\s\.]/g, '');
+        }
+
         // Tìm kiếm tài khoản dựa trên tên đăng nhập, số điện thoại hoặc email
         const account = await Account.findOne({
             $or: [
-                { username: username },
-                { phone: username },
-                { email: username }
+                { username: searchUsername },
+                { phone: searchPhone },
+                { email: searchUsername }
             ]
         });
         if (!account || account.status === 0) {

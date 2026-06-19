@@ -44,8 +44,26 @@ export default function AdminTenantsScreen() {
   }, []);
 
   const handleAddTenant = async () => {
-    if (!fullName.trim() || !phone.trim() || !email.trim() || !password.trim() || !idCard.trim() || !selectedRoomCode.trim() || !startDate.trim()) {
-      Alert.alert("Lỗi", "Vui lòng điền đầy đủ thông tin (bao gồm Email và Mật khẩu)!");
+    if (!fullName.trim() || !phone.trim() || !email.trim() || !idCard.trim() || !selectedRoomCode.trim() || !startDate.trim()) {
+      Alert.alert("Lỗi", "Vui lòng điền đầy đủ thông tin!");
+      return;
+    }
+
+    const cleanPhone = phone.trim().replace(/\D/g, "");
+    const cleanIdCard = idCard.trim().replace(/\D/g, "");
+
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email.trim())) {
+      Alert.alert("Lỗi", "Vui lòng nhập Email đúng định dạng (ví dụ: nguyenvanA@gmail.com) để làm tên đăng nhập!");
+      return;
+    }
+
+    if (cleanPhone.length !== 10) {
+      Alert.alert("Lỗi", "Số điện thoại phải gồm đúng 10 chữ số!");
+      return;
+    }
+    if (cleanIdCard.length !== 12) {
+      Alert.alert("Lỗi", "Số CCCD phải gồm đúng 12 chữ số!");
       return;
     }
 
@@ -53,12 +71,12 @@ export default function AdminTenantsScreen() {
       setSubmitting(true);
       await adminService.createTenant({
         fullName: fullName.trim(),
-        phone: phone.trim(),
+        phone: cleanPhone,
         email: email.trim(),
         roomCode: selectedRoomCode,
-        idCard: idCard.trim(),
+        idCard: cleanIdCard,
         startDate,
-        password: password.trim(),
+        password: password.trim() || "123456",
       });
       Alert.alert("Thành công", "Đã thêm khách thuê mới và tạo hợp đồng nháp!");
       setModalVisible(false);
@@ -108,7 +126,7 @@ export default function AdminTenantsScreen() {
             </View>
             <View style={styles.tenantInfo}>
               <Text style={styles.tenantName}>{item.fullName}</Text>
-              <Text style={styles.tenantSub}>SĐT: {item.phone}</Text>
+              <Text style={styles.tenantSub}>SĐT: {item.phone ? String(item.phone).replace(/\D/g, "").replace(/(\d{4})(\d{3})(\d+)/, "$1.$2.$3").replace(/(\d{4})(\d+)/, "$1.$2") : "-"}</Text>
               {item.email && <Text style={styles.tenantSub}>Email: {item.email}</Text>}
             </View>
             <Ionicons name="chevron-forward" size={18} color={COLORS.muted} />
@@ -151,14 +169,20 @@ export default function AdminTenantsScreen() {
                     autoCapitalize="none"
                   />
 
-                  <Text style={styles.label}>Số điện thoại</Text>
+                  <Text style={styles.label}>Số điện thoại (Bắt buộc 10 số)</Text>
                   <TextInput
                     style={styles.input}
                     value={phone}
-                    onChangeText={setPhone}
-                    placeholder="Nhập số điện thoại"
+                    onChangeText={(text) => {
+                      let val = text.replace(/\D/g, "");
+                      if (val.length > 10) val = val.slice(0, 10);
+                      if (val.length > 7) val = val.replace(/(\d{4})(\d{3})(\d+)/, "$1.$2.$3");
+                      else if (val.length > 4) val = val.replace(/(\d{4})(\d+)/, "$1.$2");
+                      setPhone(val);
+                    }}
+                    placeholder="Nhập 10 số điện thoại"
                     keyboardType="phone-pad"
-                    maxLength={10}
+                    maxLength={12}
                   />
 
                   <Text style={styles.label}>Mật khẩu</Text>
@@ -170,13 +194,20 @@ export default function AdminTenantsScreen() {
                     secureTextEntry
                   />
 
-                  <Text style={styles.label}>Số CCCD</Text>
+                  <Text style={styles.label}>Số CCCD (Bắt buộc 12 số)</Text>
                   <TextInput
                     style={styles.input}
                     value={idCard}
-                    onChangeText={setIdCard}
-                    placeholder="Nhập số CMND/CCCD"
+                    onChangeText={(text) => {
+                      let val = text.replace(/\D/g, "");
+                      if (val.length > 12) val = val.slice(0, 12);
+                      if (val.length > 8) val = val.replace(/(\d{4})(\d{4})(\d+)/, "$1.$2.$3");
+                      else if (val.length > 4) val = val.replace(/(\d{4})(\d+)/, "$1.$2");
+                      setIdCard(val);
+                    }}
+                    placeholder="Nhập CCCD"
                     keyboardType="numeric"
+                    maxLength={14}
                   />
 
                   <Text style={styles.label}>Chọn phòng trống</Text>

@@ -12,7 +12,8 @@ type Tab =
   | "utility"
   | "profile"
   | "rooms"
-  | "tenants";
+  | "tenants"
+  | "invoice_bulk";
 
 type Props = {
   activeTab: Tab;

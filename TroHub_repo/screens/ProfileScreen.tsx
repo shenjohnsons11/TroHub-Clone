@@ -19,10 +19,24 @@ type Props = {
 };
 
 export default function ProfileScreen({ profile, onSave, onBack }: Props) {
+  const formatPhone = (val: any) => {
+    let v = String(val || "").replace(/\D/g, "");
+    if (v.length > 7) return v.replace(/(\d{4})(\d{3})(\d+)/, "$1.$2.$3");
+    if (v.length > 4) return v.replace(/(\d{4})(\d+)/, "$1.$2");
+    return v;
+  };
+
+  const formatCCCD = (val: any) => {
+    let v = String(val || "").replace(/\D/g, "");
+    if (v.length > 8) return v.replace(/(\d{4})(\d{4})(\d+)/, "$1.$2.$3");
+    if (v.length > 4) return v.replace(/(\d{4})(\d+)/, "$1.$2");
+    return v;
+  };
+
   const [fullName, setFullName] = useState(profile.fullName);
-  const [phone, setPhone] = useState(profile.phone);
+  const [phone, setPhone] = useState(formatPhone(profile.phone));
   const [email, setEmail] = useState(profile.email);
-  const [cccd, setCccd] = useState(profile.cccd);
+  const [cccd, setCccd] = useState(formatCCCD(profile.cccd));
   const [room] = useState(profile.room);
   const [startDate] = useState(profile.startDate);
 
@@ -30,8 +44,9 @@ export default function ProfileScreen({ profile, onSave, onBack }: Props) {
   const [phoneError, setPhoneError] = useState("");
 
   const handlePhoneChange = (value: string) => {
-    const onlyNumber = value.replace(/[^0-9]/g, "");
-    setPhone(onlyNumber);
+    let onlyNumber = value.replace(/[^0-9]/g, "");
+    if (onlyNumber.length > 10) onlyNumber = onlyNumber.slice(0, 10);
+    setPhone(formatPhone(onlyNumber));
 
     if (phoneError) {
       setPhoneError("");
@@ -51,8 +66,8 @@ export default function ProfileScreen({ profile, onSave, onBack }: Props) {
     if (!phone.trim()) {
       setPhoneError("Vui lòng nhập số điện thoại");
       isValid = false;
-    } else if (phone.length !== 10) {
-      setPhoneError("Số điện thoại phải gồm đúng 10 số");
+    } else if (phone.replace(/\D/g, "").length !== 10) {
+      setPhoneError("Số điện thoại không hợp lệ (cần 10 số)");
       isValid = false;
     } else {
       setPhoneError("");
@@ -60,18 +75,13 @@ export default function ProfileScreen({ profile, onSave, onBack }: Props) {
 
     if (!isValid) return;
 
-    const updatedProfile: UserProfile = {
-      id: profile.id,
+    onSave({
+      ...profile,
       fullName: fullName.trim(),
-      phone,
+      phone: phone.replace(/\D/g, ""),
       email: email.trim(),
-      cccd,
-      room,
-      startDate,
-      role: profile.role,
-    };
-
-    onSave(updatedProfile);
+      cccd: cccd.replace(/\D/g, ""),
+    });
 
     Alert.alert("Thành công", "Thông tin cá nhân đã được cập nhật");
   };
@@ -127,7 +137,7 @@ export default function ProfileScreen({ profile, onSave, onBack }: Props) {
           value={phone}
           onChangeText={handlePhoneChange}
           keyboardType="phone-pad"
-          maxLength={10}
+          maxLength={15}
           placeholder="Nhập số điện thoại"
           placeholderTextColor={COLORS.muted}
         />
@@ -148,9 +158,13 @@ export default function ProfileScreen({ profile, onSave, onBack }: Props) {
         <TextInput
           style={styles.input}
           value={cccd}
-          onChangeText={(value) => setCccd(value.replace(/[^0-9]/g, ""))}
+          onChangeText={(value) => {
+            let digits = value.replace(/[^0-9]/g, "");
+            if (digits.length > 12) digits = digits.slice(0, 12);
+            setCccd(formatCCCD(digits));
+          }}
           keyboardType="number-pad"
-          maxLength={12}
+          maxLength={14}
           placeholder="Nhập CMND/CCCD"
           placeholderTextColor={COLORS.muted}
         />

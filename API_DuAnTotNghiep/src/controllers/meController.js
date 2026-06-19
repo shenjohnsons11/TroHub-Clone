@@ -58,10 +58,12 @@ exports.getTenantPortal = async (req, res) => {
 
         const allContractIds = contracts.map(c => c._id);
 
-        // Lấy tất cả hóa đơn theo mảng các hợp đồng (cả cũ và mới), bỏ qua hóa đơn nháp status: 0
+        // Lấy tất cả hóa đơn theo hợp đồng HIỆN TẠI (activeContract), bỏ qua hóa đơn nháp status: 0
         let invoices = [];
-        if (allContractIds.length > 0) {
-            const rawInvoices = await Invoice.find({ contractId: { $in: allContractIds }, status: { $ne: 0 } }).sort({ createdAt: -1 });
+        const currentContractIds = activeContract ? [activeContract._id] : [];
+
+        if (currentContractIds.length > 0) {
+            const rawInvoices = await Invoice.find({ contractId: { $in: currentContractIds }, status: { $ne: 0 } }).sort({ createdAt: -1 });
             invoices = rawInvoices.map(inv => ({
                 id: inv.invoiceCode || inv._id.toString(),
                 month: inv.period || '',
@@ -79,31 +81,14 @@ exports.getTenantPortal = async (req, res) => {
             }));
         }
 
-        // Lấy tất cả hóa đơn kể cả không theo hợp đồng (bỏ qua hóa đơn nháp status: 0)
-        if (invoices.length === 0 && roomInfo) {
-            const rawInvoices2 = await Invoice.find({ room: roomInfo.id, status: { $ne: 0 } }).sort({ createdAt: -1 });
-            invoices = rawInvoices2.map(inv => ({
-                id: inv.invoiceCode || inv._id.toString(),
-                month: inv.period || '',
-                fromDate: inv.fromDate || '',
-                toDate: inv.toDate || '',
-                dueDate: inv.dueDate ? new Date(inv.dueDate).toLocaleDateString('vi-VN') : '',
-                roomAmount: inv.roomAmount || 0,
-                electricity: inv.electricity || 0,
-                water: inv.water || 0,
-                services: inv.services || 0,
-                discount: inv.discount || 0,
-                penalty: inv.penalty || 0,
-                total: inv.totalAmount || 0,
-                status: ['Nháp', 'Chưa thanh toán', 'Đã thanh toán', 'Quá hạn'][inv.status] || 'Nháp'
-            }));
-        }
+        // Đã xóa block lấy hóa đơn theo roomInfo.id vì nó sẽ lấy nhầm hóa đơn của khách thuê cũ gán cho khách mới
+        // Khách mới chỉ thấy hóa đơn nếu hợp đồng của họ (contractId) thực sự phát sinh hóa đơn!
 
-        // Lấy lịch sử giao dịch của TẤT CẢ hóa đơn
+        // Lấy lịch sử giao dịch của hóa đơn thuộc hợp đồng hiện tại
         const invoiceIds = invoices.map(i => i.id);
         let payments = [];
-        if (allContractIds.length > 0) {
-            const rawInvoiceObjs = await Invoice.find({ contractId: { $in: allContractIds } });
+        if (currentContractIds.length > 0) {
+            const rawInvoiceObjs = await Invoice.find({ contractId: { $in: currentContractIds } });
             const invoiceMongoIds = rawInvoiceObjs.map(i => i._id);
             const transactions = await Transaction.find({ invoiceId: { $in: invoiceMongoIds } }).sort({ createdAt: -1 });
             payments = transactions.map((t, idx) => ({
@@ -117,17 +102,18 @@ exports.getTenantPortal = async (req, res) => {
             }));
         }
 
-        // Lấy yêu cầu sửa chữa của TẤT CẢ hợp đồng
         let repairs = [];
-        if (allContractIds.length > 0) {
-            const rawRepairs = await RepairRequest.find({ contractId: { $in: allContractIds } }).sort({ createdAt: -1 });
+        if (currentContractIds.length > 0) {
+            const rawRepairs = await RepairRequest.find({ contractId: { $in: currentContractIds } })
+                .sort({ createdAt: -1 })
+                .allowDiskUse(true);
             repairs = rawRepairs.map(r => ({
                 id: r._id.toString(),
                 category: r.title || '',
                 description: r.content || '',
                 date: r.createdAt ? new Date(r.createdAt).toLocaleDateString('vi-VN') : '',
-                status: ['Mới', 'Đang xử lý', 'Hoàn thành', 'Đã hủy'][r.status] || 'Mới',
-                priority: ['Thấp', 'Vừa', 'Cao'][r.priority] || 'Thấp',
+                status: ['Mới', 'Đang xử lý', 'Đã hoàn thành', 'Đã hủy'][r.status] || 'Mới',
+                priority: ['Chưa phân loại', 'Thấp', 'Trung bình', 'Cao'][r.priority] || 'Chưa phân loại',
                 note: r.landlordNote || '',
                 images: r.images || []
             }));
@@ -255,6 +241,10 @@ exports.createRepair = async (req, res) => {
         const contractToUse = activeContract || await Contract.findOne({ tenantId }).sort({ createdAt: -1 });
 
         let imagesArray = [];
+        console.log("ME_CONTROLLER: Received images typeof:", typeof req.body.images, "isArray:", Array.isArray(req.body.images));
+        if (typeof req.body.images === 'string') {
+            console.log("ME_CONTROLLER string preview:", req.body.images.substring(0, 100));
+        }
         if (Array.isArray(req.body.images)) {
             imagesArray = req.body.images.map(img => {
                 if (typeof img === 'string') return img;
@@ -266,7 +256,7 @@ exports.createRepair = async (req, res) => {
             contractId: contractToUse._id,
             title: req.body.category || req.body.title || 'Yêu cầu sửa chữa',
             content: req.body.description || req.body.content || '',
-            priority: 1,
+            priority: 0,
             status: 0,
             images: imagesArray
         });
@@ -309,5 +299,17 @@ exports.requestTerminateContract = async (req, res) => {
         res.status(200).json({ success: true, message: 'Đã gửi yêu cầu trả phòng thành công. Vui lòng chờ chủ trọ xác nhận!' });
     } catch (error) {
         res.status(500).json({ success: false, message: 'Lỗi Server: ' + error.message });
+    }
+};
+
+exports.deleteRepair = async (req, res) => {
+    try {
+        const deletedRequest = await RepairRequest.findByIdAndDelete(req.params.id);
+        if (!deletedRequest) {
+            return res.status(404).json({ success: false, message: "Không tìm thấy yêu cầu sửa chữa này!" });
+        }
+        res.status(200).json({ success: true, message: "Đã xóa yêu cầu sửa chữa thành công!" });
+    } catch (error) {
+        res.status(500).json({ success: false, message: "Lỗi xóa yêu cầu sửa chữa: " + error.message });
     }
 };

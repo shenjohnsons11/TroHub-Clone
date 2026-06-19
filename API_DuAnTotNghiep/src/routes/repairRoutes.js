@@ -11,4 +11,7 @@ router.post('/', repairController.createRequest);
 // [WEB] Chủ trọ cập nhật trạng thái & ghi chú
 router.put('/:id', repairController.updateRequestStatus);
 
+// Xóa yêu cầu sửa chữa (Admin)
+router.delete('/:id', repairController.deleteRequest);
+
 module.exports = router;

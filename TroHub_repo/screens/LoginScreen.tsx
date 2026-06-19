@@ -235,11 +235,9 @@ export default function LoginScreen({ onLogin }: Props) {
                     onChangeText={(v) => { 
                       const digits = v.replace(/\D/g, '');
                       let formatted = digits;
-                      if (digits.length > 3 && digits.length <= 6) {
-                        formatted = `${digits.slice(0, 3)}.${digits.slice(3)}`;
-                      } else if (digits.length > 6) {
-                        formatted = `${digits.slice(0, 3)}.${digits.slice(3, 6)}.${digits.slice(6, 10)}`;
-                      }
+                      if (formatted.length > 10) formatted = formatted.slice(0, 10);
+                      if (formatted.length > 7) formatted = formatted.replace(/(\d{4})(\d{3})(\d+)/, "$1.$2.$3");
+                      else if (formatted.length > 4) formatted = formatted.replace(/(\d{4})(\d+)/, "$1.$2");
                       setRegPhone(formatted); 
                       if (regPhoneError) setRegPhoneError(""); 
                     }}
@@ -255,12 +253,17 @@ export default function LoginScreen({ onLogin }: Props) {
                     style={[styles.input, regCccdError ? styles.inputError : null]}
                     value={regCccd}
                     onChangeText={(v) => { 
-                      setRegCccd(v.replace(/\D/g, '').slice(0, 12)); 
+                      const digits = v.replace(/\D/g, '');
+                      let formatted = digits;
+                      if (formatted.length > 12) formatted = formatted.slice(0, 12);
+                      if (formatted.length > 8) formatted = formatted.replace(/(\d{4})(\d{4})(\d+)/, "$1.$2.$3");
+                      else if (formatted.length > 4) formatted = formatted.replace(/(\d{4})(\d+)/, "$1.$2");
+                      setRegCccd(formatted); 
                       if (regCccdError) setRegCccdError(""); 
                     }}
                     placeholder="Nhập số CMND/CCCD (12 số)"
                     keyboardType="numeric"
-                    maxLength={12}
+                    maxLength={14}
                     editable={!isSubmitting}
                   />
                   {regCccdError ? <Text style={styles.errorText}>{regCccdError}</Text> : null}

@@ -1,4 +1,20 @@
 import { appData, money } from "./data.js";
+
+const formatPhone = (val) => {
+  if (!val) return "-";
+  let v = String(val).replace(/\D/g, "");
+  if (v.length > 7) return v.replace(/(\d{4})(\d{3})(\d+)/, "$1.$2.$3");
+  if (v.length > 4) return v.replace(/(\d{4})(\d+)/, "$1.$2");
+  return v;
+};
+
+const formatCCCD = (val) => {
+  if (!val) return "-";
+  let v = String(val).replace(/\D/g, "");
+  if (v.length > 8) return v.replace(/(\d{4})(\d{4})(\d+)/, "$1.$2.$3");
+  if (v.length > 4) return v.replace(/(\d{4})(\d+)/, "$1.$2");
+  return v;
+};
 import { api } from "./api.js?v=21";
 
 const app = document.querySelector("#app");
@@ -53,13 +69,13 @@ let state = {
 };
 
 const arrays = {
-  rooms: () => state.roomsData || appData.rooms,
-  tenants: () => state.tenantsData || appData.tenants,
-  contracts: () => state.contractsData || [appData.contract],
-  contractHistory: () => state.contractHistoryData || appData.contractHistory,
-  invoices: () => state.invoicesData || appData.invoices,
-  repairs: () => state.repairsData || appData.repairs,
-  payments: () => state.paymentHistoryData || appData.paymentHistory
+  rooms: () => state.roomsData || [],
+  tenants: () => state.tenantsData || [],
+  contracts: () => state.contractsData || [],
+  contractHistory: () => state.contractHistoryData || [],
+  invoices: () => state.invoicesData || [],
+  repairs: () => state.repairsData || [],
+  payments: () => state.paymentHistoryData || []
 };
 
 const statusClass = (status = "") => {
@@ -206,12 +222,19 @@ const renderBarChart = (items, valueKey = "value", labelKey = "month", formatter
   `;
 };
 
-const field = (label, value = "", type = "text", name = "", extra = "") => `
+const field = (label, value = "", type = "text", name = "", extra = "") => {
+  let displayValue = value ?? "";
+  if (name === "phone") {
+    displayValue = formatPhone(displayValue);
+  } else if (name === "citizenId") {
+    displayValue = formatCCCD(displayValue);
+  }
+  return `
   <label class="field">
     <span>${label}</span>
-    <input type="${type}" value="${value ?? ""}" ${name ? `data-field="${name}"` : ""} ${extra} />
+    <input type="${type}" value="${displayValue}" ${name ? `data-field="${name}"` : ""} ${extra} />
   </label>
-`;
+`};
 
 const moneyInputField = (label, value = "", name = "", placeholder = "") => `
   <label class="field money-field">
@@ -376,10 +399,19 @@ const renderAdminShell = (title, content, action = "Tạo hóa đơn") => `
 const revenueSeries = () => {
   const totals = new Map();
   arrays.payments()
-    .filter((payment) => payment.status === "Đã thanh toán")
+    .filter((payment) => payment.status === 1 || payment.status === "1" || payment.status === "Thành công" || payment.status === "Đã thanh toán")
     .forEach((payment) => totals.set(payment.month, (totals.get(payment.month) || 0) + numberValue(payment.amount)));
-  const series = [...totals.entries()].map(([month, value]) => ({ month, value }));
-  return series.length ? series.slice(-6) : appData.paymentRevenue;
+  
+  let series = [...totals.entries()]
+    .filter(([month]) => month && month.includes('/'))
+    .map(([month, value]) => ({ month, value, sortKey: month.split('/').reverse().join('') }))
+    .sort((a, b) => a.sortKey.localeCompare(b.sortKey))
+    .map(({ month, value }) => ({ month, value }));
+    
+  if (series.length === 0) return []; // KHÔNG HIỂN THỊ GIẢ
+  
+  const limit = parseInt(state.revenueFilter || "6", 10);
+  return series.slice(-limit);
 };
 
 const renderDashboard = () => {
@@ -395,14 +427,9 @@ const renderDashboard = () => {
 
   return renderAdminShell("Dashboard", `
     <div class="filter-row">
-      <button class="chip active">Tháng này</button>
-      <button class="chip">3 tháng</button>
-      <button class="chip">6 tháng</button>
-      <button class="chip">Tùy chọn ngày</button>
-      ${dateField("Từ ngày", state.dashboardFrom, "dashboardFrom")}
-      ${dateField("Đến ngày", state.dashboardTo, "dashboardTo")}
-      ${button("Áp dụng", "apply-dashboard-range")}
-      ${button("Đặt lại", "reset-dashboard-range", "secondary")}
+      <button class="chip ${state.revenueFilter === '1' ? 'active' : ''}" data-action="filter-rev-1">Tháng này</button>
+      <button class="chip ${state.revenueFilter === '3' ? 'active' : ''}" data-action="filter-rev-3">3 tháng</button>
+      <button class="chip ${(!state.revenueFilter || state.revenueFilter === '6') ? 'active' : ''}" data-action="filter-rev-6">6 tháng</button>
     </div>
     <div class="metric-grid">
       <article class="metric card"><span>Tổng số phòng</span><strong>${rooms.length}</strong><small>Toàn bộ hệ thống</small></article>
@@ -416,10 +443,10 @@ const renderDashboard = () => {
       <article class="metric card" style="cursor:pointer; align-items:center;" data-action="add-room">
         <strong>Thêm phòng</strong><small>Tạo phòng mới</small>
       </article>
-      <article class="metric card" style="cursor:pointer; align-items:center;" data-admin-nav="contract">
+      <article class="metric card" style="cursor:pointer; align-items:center;" data-action="add-contract">
         <strong>Tạo hợp đồng</strong><small>Cho khách mới</small>
       </article>
-      <article class="metric card" style="cursor:pointer; align-items:center;" data-admin-nav="invoices">
+      <article class="metric card" style="cursor:pointer; align-items:center;" data-action="create-invoice">
         <strong>Tạo hóa đơn</strong><small>Ghi điện nước</small>
       </article>
       <article class="metric card" style="cursor:pointer; align-items:center;" data-admin-nav="repairs">
@@ -581,9 +608,9 @@ const renderTenants = () => {
             <tr data-tenant-detail-row="${tenant.id}" style="cursor:pointer">
               <td><b>${tenant.name}</b></td>
               <td>${tenant.email || "-"}</td>
-              <td>${tenant.phone}</td>
+              <td>${formatPhone(tenant.phone)}</td>
               <td>${tenant.room}</td>
-              <td>${tenant.citizenId}</td>
+              <td>${formatCCCD(tenant.citizenId)}</td>
               <td>${tenant.startDate}</td>
               <td>${badge(tenant.accountStatus || "Chưa tạo")}</td>
               <td>${badge(tenant.status)}</td>
@@ -609,9 +636,9 @@ const renderTenantForm = () => {
     <article class="card form-card narrow" data-form="tenant">
       ${!isNew ? field("Mã khách (Hệ thống)", tenant.id, "text", "id", "readonly") : ""}
       ${field("Email *", tenant.email || "", "email", "email", "placeholder='Nhập Email cốt lõi để tìm hoặc tạo mới'")}
-      ${field("Số điện thoại", tenant.phone, "text", "phone", isNew ? "placeholder='Có thể bỏ trống nếu khách đã có App'" : "")}
+      ${field("Số điện thoại", tenant.phone, "text", "phone", isNew ? "placeholder='Bắt buộc 10 số (Nếu chưa có App)'" : "")}
       ${field("Họ tên", tenant.name, "text", "name", isNew ? "placeholder='Có thể bỏ trống nếu khách đã có App'" : "")}
-      ${field("CCCD", tenant.citizenId, "text", "citizenId")}
+      ${field("CCCD", tenant.citizenId, "text", "citizenId", isNew ? "placeholder='Bắt buộc 12 số (Nếu chưa có App)'" : "")}
       ${!isNew ? selectField("Trạng thái", tenant.status, ["Đang thuê", "Ngừng thuê"], "status") : ""}
       <div class="form-actions">
         ${button("Hủy", "cancel-tenant", "outline")}
@@ -648,7 +675,7 @@ const renderContract = () => {
         <h2>Thông tin hợp đồng</h2>
         <div class="form-grid one" data-form="contract">
           ${field("Mã hợp đồng", c.id, "text", "id")}
-          ${selectField("Chọn phòng", c.room, arrays.rooms().map(r => r.id), "room")}
+          ${selectField("Chọn phòng", c.room, arrays.rooms().filter(r => r.status === "Còn trống" || r.id === c.room).map(r => r.id), "room")}
           ${selectField("Chọn khách thuê", c.tenant, arrays.tenants().map(t => t.name), "tenant")}
           ${dateField("Ngày bắt đầu", state.contractStartDate, "contractStartDate")}
           ${dateField("Ngày kết thúc", state.contractEndDate, "contractEndDate")}
@@ -722,6 +749,7 @@ const renderInvoices = () => renderAdminShell("Quản lý hóa đơn", `
     ${field("Khách thuê", "")}
     ${button("Lọc", "apply-invoice-filter")}
     ${button("Đặt lại", "reset-invoice-filter", "secondary")}
+    ${button("Lập HĐ hàng loạt", "nav-invoice-bulk", "primary")}
     ${button("Xuất Excel", "export-excel", "outline")}
   </div>
   <article class="card panel">
@@ -991,14 +1019,21 @@ const renderRepairs = () => {
             <h2>Danh sách yêu cầu</h2>
             <p class="muted">Khách gửi mô tả và ảnh, admin phân độ ưu tiên.</p>
           </div>
-          ${badge(`${repairs.length} yêu cầu`)}
+          <div style="display:flex; gap: 8px; align-items:center;">
+            ${(state.selectedRepairsForDelete || []).length > 0 ? `<button data-action="delete-multiple-repairs" style="background:var(--danger); color:white; border:none; padding:6px 16px; border-radius:6px; font-weight:600; cursor:pointer;">Xóa ${(state.selectedRepairsForDelete || []).length} mục đã chọn</button>` : ""}
+            ${badge(`${repairs.length} yêu cầu`)}
+          </div>
         </div>
         <div class="table-wrap">
           <table>
-            <thead><tr><th>Mã YC</th><th>Phòng</th><th>Người gửi</th><th>Loại sự cố</th><th>Ưu tiên</th><th>Người đặt</th><th>Ảnh</th><th>Ngày gửi</th><th>Trạng thái</th></tr></thead>
+            <thead><tr>
+              <th style="width: 40px; text-align: center;"><input type="checkbox" data-action="toggle-all-repairs" ${state.selectedRepairsForDelete?.length === repairs.length && repairs.length > 0 ? "checked" : ""} title="Chọn tất cả"></th>
+              <th>Mã YC</th><th>Phòng</th><th>Người gửi</th><th>Loại sự cố</th><th>Ưu tiên</th><th>Người đặt</th><th>Ảnh</th><th>Ngày gửi</th><th>Trạng thái</th>
+            </tr></thead>
             <tbody>
               ${repairs.map((repair) => `
-                <tr data-repair-select="${repair.id}">
+                <tr data-repair-select="${repair.id}" style="${(state.selectedRepairsForDelete || []).includes(repair.id) ? 'background: var(--surface-2);' : ''}">
+                  <td style="text-align: center;" onclick="event.stopPropagation()"><input type="checkbox" data-action="toggle-repair" data-id="${repair.id}" ${(state.selectedRepairsForDelete || []).includes(repair.id) ? "checked" : ""}></td>
                   <td><b>${repair.id}</b></td>
                   <td>${repair.room}</td>
                   <td>${repair.sender}</td>
@@ -1014,22 +1049,29 @@ const renderRepairs = () => {
           </table>
         </div>
       </article>
+      ${state.selectedRepair ? `
       <article class="card panel" data-form="repair">
         <h2>Chi tiết request</h2>
-        <div class="repair-images">
-          ${selectedImages.map((image, index) => `<div>${index + 1}<span>${image}</span></div>`).join("") || "<div>0<span>Chưa có ảnh</span></div>"}
+        <div class="repair-images" style="display: flex; gap: 8px; overflow-x: auto; padding-bottom: 8px;">
+          ${selectedImages.map((image, index) => `<img src="${image}" alt="Ảnh sự cố ${index + 1}" style="width: 80px; height: 80px; object-fit: cover; border-radius: 6px; border: 1px solid var(--border);" />`).join("") || "<span class='muted'>Chưa có ảnh đính kèm</span>"}
         </div>
         <p><b>Người gửi:</b> ${selected.sender || '-'} • Phòng ${selected.room || '-'}</p>
         <p><b>Mô tả:</b> ${selected.description || "-"}</p>
         <p><b>Ghi chú xử lý:</b> ${selected.note || "Chưa có ghi chú"}</p>
-        ${selectField("Admin đặt độ ưu tiên", selected.priority || "Thấp", ["Thấp", "Trung bình", "Cao"], "priority")}
+        ${selectField("Admin đặt độ ưu tiên", selected.priority || "Chưa phân loại", ["Chưa phân loại", "Thấp", "Trung bình", "Cao"], "priority")}
         ${selectField("Cập nhật trạng thái", selected.status || "Mới", ["Mới", "Đang xử lý", "Đã hoàn thành", "Đã hủy"], "status")}
         ${textareaField("Ghi chú của chủ trọ", selected.note || "", "note")}
         <div class="form-actions">
           ${button("Lưu cập nhật", "save-repair")}
           ${selected.status !== "Đã hoàn thành" ? button("✓ Hoàn thành", "complete-repair", "outline") : ""}
+          ${button("Xóa yêu cầu", "delete-repair-admin", "outline", "style='color:var(--danger); border-color:var(--danger);'")}
         </div>
       </article>
+      ` : `
+      <article class="card panel" style="display:flex; align-items:center; justify-content:center; text-align:center;">
+        <p class="muted">Vui lòng chọn một yêu cầu từ danh sách<br/>để xem chi tiết và xử lý.</p>
+      </article>
+      `}
     </div>
   `, "Cập nhật");
 };
@@ -1297,13 +1339,28 @@ const renderTenantRepairs = () => renderTenantShell("Yêu cầu sửa chữa", `
       <div class="form-actions">${button("Gửi yêu cầu", "tenant-create-repair")}</div>
     </article>
     <article class="card panel">
-      <h2>Yêu cầu đã gửi</h2>
+      <div class="panel-head" style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 16px;">
+        <h2>Yêu cầu đã gửi</h2>
+        <div style="display:flex; gap: 8px; align-items:center;">
+          ${(state.selectedRepairsForDelete || []).length > 0 ? `<button data-action="delete-multiple-repairs-tenant" style="background:var(--danger); color:white; border:none; padding:4px 12px; border-radius:4px; font-weight:600; cursor:pointer;">Xóa ${(state.selectedRepairsForDelete || []).length}</button>` : ""}
+          <label style="font-size:0.9em; display:flex; align-items:center; gap:4px; cursor:pointer;">
+            <input type="checkbox" data-action="toggle-all-repairs-tenant" ${state.selectedRepairsForDelete?.length === tenantRepairs().length && tenantRepairs().length > 0 ? "checked" : ""}> Tất cả
+          </label>
+        </div>
+      </div>
       <div class="repair-list">
         ${tenantRepairs().map((repair) => `
-          <div class="repair-row">
-            <strong>${repair.category} • ${repair.date}</strong>
+          <div class="repair-row" style="position:relative; padding-bottom: 40px; ${(state.selectedRepairsForDelete || []).includes(repair.id) ? 'background: var(--surface-2);' : ''}">
+            <div style="display:flex; justify-content:space-between;">
+              <strong>${repair.category} • ${repair.date}</strong>
+              <input type="checkbox" data-action="toggle-repair-tenant" data-id="${repair.id}" ${(state.selectedRepairsForDelete || []).includes(repair.id) ? "checked" : ""}>
+            </div>
             <span>${repair.description}</span>
-            ${badge(repair.status)} ${badge(`Ưu tiên: ${repair.priority}`)}
+            <div style="margin: 8px 0;">
+              ${badge(repair.status)} ${badge(`Ưu tiên: ${repair.priority}`)}
+            </div>
+            ${repair.note ? `<div style="margin-top: 8px; padding: 8px; background: var(--surface-2); border-left: 3px solid var(--primary); border-radius: 4px; font-size: 0.9em;"><b>Chủ trọ nhắn:</b> ${repair.note}</div>` : ""}
+            <button data-action="delete-repair-tenant" data-id="${repair.id}" style="position:absolute; bottom:12px; right:12px; padding: 4px 8px; font-size: 0.8em; color:var(--danger); border: 1px solid var(--danger); background:transparent; border-radius:4px; cursor:pointer;">Xóa</button>
           </div>
         `).join("") || "<p class='muted'>Chưa có yêu cầu sửa chữa.</p>"}
       </div>
@@ -1405,9 +1462,9 @@ const renderTenantDetail = () => {
         <div class="panel-head"><h2>${tenant.name}</h2>${badge(tenant.status)}</div>
         <dl class="info-list">
           <div><dt>Mã khách</dt><dd>${tenant.id}</dd></div>
-          <div><dt>Số điện thoại</dt><dd>${tenant.phone}</dd></div>
+          <div><dt>Số điện thoại</dt><dd>${formatPhone(tenant.phone)}</dd></div>
           <div><dt>Email</dt><dd>${tenant.email || "-"}</dd></div>
-          <div><dt>CCCD</dt><dd>${tenant.citizenId || "-"}</dd></div>
+          <div><dt>CCCD</dt><dd>${formatCCCD(tenant.citizenId)}</dd></div>
           <div><dt>Ngày bắt đầu</dt><dd>${tenant.startDate}</dd></div>
           <div><dt>Tài khoản</dt><dd>${badge(tenant.accountStatus || "Chưa tạo")}</dd></div>
         </dl>
@@ -1462,6 +1519,65 @@ const renderTenantDetail = () => {
   `);
 };
 
+const renderInvoiceBulk = () => {
+  const list = state.bulkPreviewData || [];
+  return renderAdminShell("Lập hóa đơn hàng loạt", `
+    <div style="margin-bottom: 20px;">
+      ${button("← Quay lại", "nav-invoices", "outline")}
+      ${button("Phát hành tất cả", "submit-bulk-invoices")}
+    </div>
+    <article class="card panel" style="overflow-x: auto;">
+      <table style="width: 100%; text-align: left; border-collapse: collapse;">
+        <thead>
+          <tr style="border-bottom: 2px solid var(--border);">
+            <th style="padding: 10px; width: 40px;"><input type="checkbox" id="bulk-select-all" ${list.length > 0 && list.every(i => i.selected) ? "checked" : ""}></th>
+            <th style="padding: 10px;">Phòng</th>
+            <th style="padding: 10px;">Khách</th>
+            <th style="padding: 10px;">Tiền phòng</th>
+            <th style="padding: 10px;">Dịch vụ</th>
+            <th style="padding: 10px;">Điện Cũ</th>
+            <th style="padding: 10px; width: 120px;">Điện Mới</th>
+            <th style="padding: 10px;">Nước Cũ</th>
+            <th style="padding: 10px; width: 120px;">Nước Mới</th>
+            <th style="padding: 10px;">Thành tiền (Dự kiến)</th>
+          </tr>
+        </thead>
+        <tbody id="bulk-invoice-tbody">
+          ${list.length === 0 ? '<tr><td colspan="9" style="text-align:center; padding: 20px;">Không có hợp đồng nào đang hiệu lực để lập hóa đơn</td></tr>' : ''}
+          ${list.map((item, index) => {
+            const electricityAmount = Math.max(0, (item.electricityNew || 0) - item.electricityOld) * item.electricityPrice;
+            const waterAmount = Math.max(0, (item.waterNew || 0) - item.waterOld) * item.waterPrice;
+            const total = item.roomAmount + item.services + electricityAmount + waterAmount;
+            return `
+            <tr style="border-bottom: 1px solid var(--border);" data-index="${index}">
+              <td style="padding: 10px;"><input type="checkbox" class="bulk-select-item" data-index="${index}" ${item.selected ? "checked" : ""}></td>
+              <td style="padding: 10px;"><strong>${item.room}</strong></td>
+              <td style="padding: 10px;">${item.tenant}</td>
+              <td style="padding: 10px;">
+                <input type="number" class="bulk-input" data-field="roomAmount" data-index="${index}" value="${item.roomAmount || 0}" style="width:100px; padding: 6px; border: 1px solid var(--border); border-radius: 4px;">
+              </td>
+              <td style="padding: 10px;">
+                <input type="number" class="bulk-input" data-field="services" data-index="${index}" value="${item.services || 0}" style="width:100px; padding: 6px; border: 1px solid var(--border); border-radius: 4px;">
+              </td>
+              <td style="padding: 10px;">${item.electricityOld}</td>
+              <td style="padding: 10px;">
+                ${item.electricityPrice > 0 ? `<input type="number" class="bulk-input" data-field="electricityNew" data-index="${index}" value="${item.electricityNew || ""}" placeholder="Nhập chỉ số..." style="width:100%; padding: 6px; border: 1px solid var(--border); border-radius: 4px;">` : `<span style="color:var(--text-light)">Khoán</span>`}
+              </td>
+              <td style="padding: 10px;">${item.waterOld}</td>
+              <td style="padding: 10px;">
+                ${item.waterPrice > 0 ? `<input type="number" class="bulk-input" data-field="waterNew" data-index="${index}" value="${item.waterNew || ""}" placeholder="Nhập chỉ số..." style="width:100%; padding: 6px; border: 1px solid var(--border); border-radius: 4px;">` : `<span style="color:var(--text-light)">Khoán</span>`}
+              </td>
+              <td style="padding: 10px; font-weight: bold; color: var(--primary);" id="bulk-total-${index}">
+                ${money(total)}
+              </td>
+            </tr>
+          `}).join("")}
+        </tbody>
+      </table>
+    </article>
+  `);
+};
+
 const renderAdmin = () => {
   const pages = {
     dashboard: renderDashboard,
@@ -1475,6 +1591,7 @@ const renderAdmin = () => {
     invoices: renderInvoices,
     "invoice-create": renderInvoiceCreate,
     "invoice-detail": renderInvoiceDetail,
+    "invoice_bulk": renderInvoiceBulk,
     payments: renderPaymentHistory,
     repairs: renderRepairs,
     settings: renderSettings
@@ -1641,6 +1758,52 @@ const handleAction = async (action) => {
       return showToast("Đã xóa phòng bằng API");
     }
 
+    if (action === "nav-invoice-bulk") {
+      try {
+        const previewData = await api.invoices.getBulkPreview();
+        state.bulkPreviewData = previewData.map(item => ({ ...item, selected: true }));
+        setState({ adminPage: "invoice_bulk" });
+      } catch (e) {
+        alert(e.message);
+      }
+      return;
+    }
+    
+    if (action === "submit-bulk-invoices") {
+      try {
+        const data = (state.bulkPreviewData || []).filter(item => item.selected);
+        if (data.length === 0) return showToast("Vui lòng chọn ít nhất 1 phòng để phát hành", "error");
+
+        const submitData = data.map(item => {
+          if (item.electricityPrice > 0) {
+            if (item.electricityNew === undefined || item.electricityNew === "" || item.electricityNew === null) throw new Error(`Phòng ${item.room}: Chưa nhập chỉ số điện`);
+            if (item.electricityNew < item.electricityOld) throw new Error(`Phòng ${item.room}: Chỉ số điện mới nhỏ hơn cũ`);
+          } else {
+            item.electricityNew = item.electricityOld; // Default to old if not metered
+          }
+          
+          if (item.waterPrice > 0) {
+            if (item.waterNew === undefined || item.waterNew === "" || item.waterNew === null) throw new Error(`Phòng ${item.room}: Chưa nhập chỉ số nước`);
+            if (item.waterNew < item.waterOld) throw new Error(`Phòng ${item.room}: Chỉ số nước mới nhỏ hơn cũ`);
+          } else {
+            item.waterNew = item.waterOld; // Default to old if not metered
+          }
+          
+          return item;
+        });
+
+        if (!confirm(`Phát hành ${submitData.length} hóa đơn cùng lúc?`)) return;
+
+        const res = await api.invoices.bulkCreate({ invoices: submitData });
+        alert(res.message || "Tạo hóa đơn hàng loạt thành công!");
+        await loadAllData();
+        setState({ adminPage: "invoices" });
+      } catch (e) {
+        alert(e.message);
+      }
+      return;
+    }
+
     if (action === "mark-paid") {
       const invoice = findInvoice();
       if (!invoice) return;
@@ -1670,7 +1833,8 @@ const handleAction = async (action) => {
       setState({ 
         selectedContract: "",
         contractStartDate: "",
-        contractEndDate: ""
+        contractEndDate: "",
+        adminPage: "contract"
       });
       return;
     }
@@ -1682,11 +1846,18 @@ const handleAction = async (action) => {
       const payload = collectForm("tenant");
       payload.startDate = state.tenantStartDate;
       
-      if (payload.phone) payload.phone = payload.phone.replace(/\\D/g, "");
-      if (payload.citizenId) payload.citizenId = payload.citizenId.replace(/\\D/g, "");
+      if (payload.phone) payload.phone = payload.phone.replace(/\D/g, "");
+      if (payload.citizenId) payload.citizenId = payload.citizenId.replace(/\D/g, "");
 
       if (!state.selectedTenant) {
         if (!payload.email) return showToast("Vui lòng nhập Email cốt lõi để tìm hoặc tạo mới!");
+      }
+
+      if (payload.email) {
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        if (!emailRegex.test(payload.email.trim())) {
+          return showToast("Vui lòng nhập Email đúng định dạng (ví dụ: nguyenvanA@gmail.com) để làm tên đăng nhập!");
+        }
       }
       
       if (payload.phone && payload.phone.length !== 10) return showToast("Số điện thoại phải gồm đúng 10 chữ số");
@@ -1743,7 +1914,7 @@ const handleAction = async (action) => {
       setState({ adminPage: "invoice-detail" });
       return showToast("Đã đánh dấu hóa đơn đã thanh toán - Lịch sử thanh toán đã cập nhật!");
     }
-
+    
     if (action === "go-repairs") return setState({ adminPage: "repairs" });
     if (action === "save-repair") {
       const repair = findRepair();
@@ -1759,10 +1930,94 @@ const handleAction = async (action) => {
       await loadAllData();
       return showToast("Đã đánh dấu hoàn thành sửa chữa!");
     }
+    if (action === "delete-repair-admin") {
+      if (!confirm("Bạn có chắc chắn muốn xóa vĩnh viễn yêu cầu này không?")) return;
+      const repair = findRepair();
+      await api.repairs.delete(repair.objectId || repair.id);
+      setState({ selectedRepair: null });
+      await loadAllData();
+      return showToast("Đã xóa yêu cầu sửa chữa");
+    }
+    if (action === "delete-multiple-repairs") {
+      const deleteIds = state.selectedRepairsForDelete || [];
+      if (!deleteIds.length) return;
+      if (!confirm(`Bạn có chắc chắn muốn xóa vĩnh viễn ${deleteIds.length} yêu cầu đã chọn không?`)) return;
+      
+      const repairs = arrays.repairs();
+      const promises = deleteIds.map(id => {
+        const repair = repairs.find(r => r.id === id);
+        if (repair) return api.repairs.delete(repair.objectId || repair.id);
+      }).filter(Boolean);
+      
+      await Promise.all(promises);
+      setState({ selectedRepair: null, selectedRepairsForDelete: [] });
+      await loadAllData();
+      return showToast(`Đã xóa ${deleteIds.length} yêu cầu sửa chữa!`);
+    }
+    if (action === "delete-repair-tenant") {
+      if (!confirm("Bạn có chắc chắn muốn xóa yêu cầu sửa chữa này không?")) return;
+      const id = target.dataset.id;
+      const repair = tenantRepairs().find(r => r.id === id);
+      if (repair) {
+        await api.me.deleteRepair(repair.objectId || repair.id);
+        await loadTenantData();
+        return showToast("Đã xóa yêu cầu sửa chữa");
+      }
+    }
+    if (action === "delete-multiple-repairs-tenant") {
+      const deleteIds = state.selectedRepairsForDelete || [];
+      if (!deleteIds.length) return;
+      if (!confirm(`Bạn có chắc chắn muốn xóa ${deleteIds.length} yêu cầu đã chọn không?`)) return;
+      
+      const repairs = tenantRepairs();
+      const promises = deleteIds.map(id => {
+        const repair = repairs.find(r => r.id === id);
+        if (repair) return api.me.deleteRepair(repair.objectId || repair.id);
+      }).filter(Boolean);
+      
+      await Promise.all(promises);
+      state.selectedRepairsForDelete = [];
+      await loadTenantData();
+      return showToast(`Đã xóa ${deleteIds.length} yêu cầu sửa chữa!`);
+    }
 
     if (action === "tenant-create-repair") {
       const payload = collectForm("tenant-repair");
       if (!payload.category || !payload.description) return showToast("Vui lòng nhập loại sự cố và mô tả");
+      
+      // Đọc file ảnh (base64)
+      const fileInput = app.querySelector(`[data-form="tenant-repair"] input[type="file"][data-field="images"]`);
+      const files = fileInput ? fileInput.files : [];
+      const base64Images = [];
+      
+      if (files.length > 0) {
+        for (let i = 0; i < files.length; i++) {
+          const file = files[i];
+          const p = new Promise(resolve => {
+            const reader = new FileReader();
+            reader.onload = e => {
+              const img = new Image();
+              img.onload = () => {
+                const canvas = document.createElement("canvas");
+                let width = img.width;
+                let height = img.height;
+                const MAX = 800;
+                if (width > height && width > MAX) { height *= MAX / width; width = MAX; }
+                else if (height > MAX) { width *= MAX / height; height = MAX; }
+                canvas.width = width;
+                canvas.height = height;
+                canvas.getContext("2d").drawImage(img, 0, 0, width, height);
+                resolve(canvas.toDataURL("image/jpeg", 0.6));
+              };
+              img.src = e.target.result;
+            };
+            reader.readAsDataURL(file);
+          });
+          base64Images.push(await p);
+        }
+      }
+      payload.images = base64Images;
+      
       await api.me.createRepair(payload);
       await loadTenantData();
       return showToast("Đã gửi yêu cầu sửa chữa cho chủ trọ");
@@ -1780,6 +2035,12 @@ const handleAction = async (action) => {
     if (action === "reset-dashboard-range") return setState({ dashboardFrom: "01/05/2026", dashboardTo: "31/05/2026", activeCalendar: "" });
     if (action === "reset-invoice-filter") return setState({ invoiceFrom: "01/05/2026", invoiceTo: "31/05/2026", activeCalendar: "" });
     if (action === "apply-dashboard-range" || action === "apply-invoice-filter") return setState({ activeCalendar: "" });
+
+    // Lọc biểu đồ doanh thu
+    if (action === "filter-rev-1") return setState({ revenueFilter: "1" });
+    if (action === "filter-rev-3") return setState({ revenueFilter: "3" });
+    if (action === "filter-rev-6") return setState({ revenueFilter: "6" });
+
 
     // Tenant invoice filter buttons
     if (action === "tenant-filter-month") return setState({ tenantInvoiceFilter: "month" });
@@ -1824,19 +2085,34 @@ const handleAction = async (action) => {
 
 app.addEventListener("input", (event) => {
   const target = event.target;
+
+  if (target.classList.contains('bulk-input')) {
+    const idx = target.dataset.index;
+    const field = target.dataset.field;
+    if (state.bulkPreviewData && state.bulkPreviewData[idx]) {
+      state.bulkPreviewData[idx][field] = Number(target.value);
+      const item = state.bulkPreviewData[idx];
+      const electricityAmount = Math.max(0, (item.electricityNew || 0) - item.electricityOld) * item.electricityPrice;
+      const waterAmount = Math.max(0, (item.waterNew || 0) - item.waterOld) * item.waterPrice;
+      const total = item.roomAmount + item.services + electricityAmount + waterAmount;
+      const totalEl = document.getElementById(`bulk-total-${idx}`);
+      if (totalEl) totalEl.innerText = money(total);
+    }
+  }
   
-  if (target.id === "reg-phone") {
+  if (target.id === "reg-phone" || target.dataset.field === "phone") {
     let val = target.value.replace(/\D/g, "");
     if (val.length > 10) val = val.slice(0, 10);
-    if (val.length > 7) val = val.slice(0, 4) + "." + val.slice(4, 7) + "." + val.slice(7);
-    else if (val.length > 4) val = val.slice(0, 4) + "." + val.slice(4);
-    target.value = val;
+    target.value = formatPhone(val);
+    if (target.value === "-") target.value = "";
     return;
   }
-  if (target.id === "reg-idCard") {
+  
+  if (target.id === "reg-idCard" || target.dataset.field === "citizenId") {
     let val = target.value.replace(/\D/g, "");
     if (val.length > 12) val = val.slice(0, 12);
-    target.value = val;
+    target.value = formatCCCD(val);
+    if (target.value === "-") target.value = "";
     return;
   }
 
@@ -1870,6 +2146,58 @@ app.addEventListener("input", (event) => {
 app.addEventListener("change", (event) => {
   const target = event.target;
   
+  if (target.dataset.action === "toggle-all-repairs") {
+    const repairs = arrays.repairs();
+    if (target.checked) {
+      state.selectedRepairsForDelete = repairs.map(r => r.id);
+    } else {
+      state.selectedRepairsForDelete = [];
+    }
+    render();
+    return;
+  }
+  
+  if (target.id === 'bulk-select-all') {
+    const checked = target.checked;
+    (state.bulkPreviewData || []).forEach(item => item.selected = checked);
+    document.querySelectorAll('.bulk-select-item').forEach(el => el.checked = checked);
+    return;
+  }
+
+  if (target.classList.contains('bulk-select-item')) {
+    const idx = target.dataset.index;
+    if (state.bulkPreviewData && state.bulkPreviewData[idx]) {
+      state.bulkPreviewData[idx].selected = target.checked;
+      const allChecked = state.bulkPreviewData.every(item => item.selected);
+      const selectAllEl = document.getElementById('bulk-select-all');
+      if (selectAllEl) selectAllEl.checked = allChecked;
+    }
+    return;
+  }
+  
+  if (target.dataset.action === "toggle-all-repairs-tenant") {
+    const repairs = tenantRepairs();
+    if (target.checked) {
+      state.selectedRepairsForDelete = repairs.map(r => r.id);
+    } else {
+      state.selectedRepairsForDelete = [];
+    }
+    render();
+    return;
+  }
+
+  if (target.dataset.action === "toggle-repair" || target.dataset.action === "toggle-repair-tenant") {
+    const id = target.dataset.id;
+    state.selectedRepairsForDelete = state.selectedRepairsForDelete || [];
+    if (target.checked) {
+      state.selectedRepairsForDelete.push(id);
+    } else {
+      state.selectedRepairsForDelete = state.selectedRepairsForDelete.filter(rId => rId !== id);
+    }
+    render();
+    return;
+  }
+  
   // Tự động tải lại form Tạo Hóa Đơn khi chọn Phòng
   if (target.dataset.field === "room" && state.adminPage === "invoice-create") {
     state.room = target.value;
@@ -1891,7 +2219,7 @@ app.addEventListener("change", (event) => {
 });
 
 app.addEventListener("click", async (event) => {
-  const target = event.target.closest("button, tr");
+  const target = event.target.closest("button, tr, article, [data-action], [data-admin-nav]");
   if (!target) return;
 
   if (target.dataset.tenantPay) {
@@ -1981,6 +2309,10 @@ app.addEventListener("click", async (event) => {
     const password = document.querySelector("#reg-password").value.trim();
     const role = Number(document.querySelector("#reg-role").value);
     if (!fullName || !phone || !email || !password) return showToast("Vui lòng điền đầy đủ thông tin có dấu *");
+    
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) return showToast("Email đăng ký phải đúng định dạng (VD: nguyenvanA@gmail.com)!");
+    
     if (phone.length !== 10) return showToast("Số điện thoại phải gồm đúng 10 chữ số");
     if (idCard && idCard.length !== 12) return showToast("Số CCCD phải gồm đúng 12 chữ số");
     if (password.length < 6) return showToast("Mật khẩu phải có ít nhất 6 ký tự");

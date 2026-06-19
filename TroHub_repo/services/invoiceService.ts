@@ -180,4 +180,34 @@ export const invoiceService = {
       throw error;
     }
   },
+
+  async getBulkPreview(): Promise<any[]> {
+    try {
+      const token = await authService.getToken();
+      if (!token) throw new Error("Không tìm thấy token");
+      const response = await apiClient.get<{ success: boolean; data?: any[]; message?: string }>(
+        "/invoices/bulk-preview",
+        token
+      );
+      if (!response.success) throw new Error(response.message || "Lỗi tải preview");
+      return response.data || [];
+    } catch (e) {
+      throw e;
+    }
+  },
+
+  async bulkCreate(payload: { invoices: any[] }): Promise<void> {
+    try {
+      const token = await authService.getToken();
+      if (!token) throw new Error("Không tìm thấy token");
+      const response = await apiClient.post<{ success: boolean; message?: string }>(
+        "/invoices/bulk",
+        payload,
+        token
+      );
+      if (!response.success) throw new Error(response.message || "Lỗi tạo hóa đơn đồng loạt");
+    } catch (e) {
+      throw e;
+    }
+  },
 };

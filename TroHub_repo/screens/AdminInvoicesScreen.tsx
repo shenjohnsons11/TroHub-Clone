@@ -1,10 +1,15 @@
 import React, { useEffect, useState } from "react";
 import { View, Text, StyleSheet, FlatList, Pressable, TextInput, Modal, ActivityIndicator, Alert } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+import { useNavigation } from "@react-navigation/native";
 import { COLORS } from "../constants/theme";
 import { adminService, AdminInvoice, AdminRoom, AdminContract } from "../services/adminService";
+type Props = {
+  params?: any;
+  onNavigate?: (tab: any, params?: any) => void;
+};
 
-export default function AdminInvoicesScreen() {
+export default function AdminInvoicesScreen({ params, onNavigate }: Props) {
   const [invoices, setInvoices] = useState<AdminInvoice[]>([]);
   const [rooms, setRooms] = useState<AdminRoom[]>([]);
   const [contracts, setContracts] = useState<AdminContract[]>([]);
@@ -12,7 +17,7 @@ export default function AdminInvoicesScreen() {
   const [filter, setFilter] = useState<"all" | "unpaid" | "paid">("all");
 
   // Modal states for creating invoice
-  const [modalVisible, setModalVisible] = useState(false);
+  const [modalVisible, setModalVisible] = useState(params?.action === "create");
   const [selectedRoomId, setSelectedRoomId] = useState("");
   const [period, setPeriod] = useState("");
   const [dueDate, setDueDate] = useState("");
@@ -225,8 +230,9 @@ export default function AdminInvoicesScreen() {
   };
 
   const filteredInvoices = invoices.filter(invoice => {
-    const isUnpaid = invoice.status === 1 || invoice.status === 0 || invoice.status === 3 || invoice.status === "UNPAID" || invoice.status === "DRAFT" || invoice.status === "OVERDUE" || invoice.status === "Chưa thanh toán" || invoice.status === "Nháp" || invoice.status === "Quá hạn";
-    const isPaid = invoice.status === 2 || invoice.status === "PAID" || invoice.status === "Đã thanh toán";
+    const status = invoice.status as any;
+    const isUnpaid = status === 1 || status === 0 || status === 3 || status === "UNPAID" || status === "DRAFT" || status === "OVERDUE" || status === "Chưa thanh toán" || status === "Nháp" || status === "Quá hạn";
+    const isPaid = status === 2 || status === "PAID" || status === "Đã thanh toán";
     if (filter === "unpaid") return isUnpaid;
     if (filter === "paid") return isPaid;
     return true;
@@ -246,10 +252,16 @@ export default function AdminInvoicesScreen() {
     <View style={styles.container}>
       <View style={styles.header}>
         <Text style={styles.title}>Quản lý hóa đơn</Text>
-        <Pressable style={styles.addButton} onPress={() => setModalVisible(true)}>
-          <Ionicons name="receipt" size={18} color="#FFFFFF" />
-          <Text style={styles.addButtonText}>Tạo hóa đơn</Text>
-        </Pressable>
+        <View style={{ flexDirection: 'row', gap: 8 }}>
+          <Pressable style={styles.bulkButton} onPress={() => onNavigate && onNavigate("invoice_bulk")}>
+            <Ionicons name="documents-outline" size={18} color="#FFFFFF" />
+            <Text style={styles.addButtonText}>Hàng loạt</Text>
+          </Pressable>
+          <Pressable style={styles.addButton} onPress={() => setModalVisible(true)}>
+            <Ionicons name="receipt" size={18} color="#FFFFFF" />
+            <Text style={styles.addButtonText}>Tạo</Text>
+          </Pressable>
+        </View>
       </View>
 
       {/* Bộ lọc */}
@@ -291,7 +303,7 @@ export default function AdminInvoicesScreen() {
               <View style={[styles.statusBadge, { backgroundColor: getStatusBg(item.status) }]}>
                 <Text style={[styles.statusText, { color: getStatusColor(item.status) }]}>{getStatusText(item.status)}</Text>
               </View>
-              {(item.status === 1 || item.status === "UNPAID" || item.status === "Chưa thanh toán") && (
+              {((item.status as any) === 1 || (item.status as any) === "UNPAID" || (item.status as any) === "Chưa thanh toán") && (
                 <Pressable
                   style={{ marginTop: 8, backgroundColor: COLORS.orange, paddingHorizontal: 10, paddingVertical: 4, borderRadius: 6 }}
                   onPress={() => handleRemind(item._id)}
@@ -456,10 +468,20 @@ const styles = StyleSheet.create({
   addButton: {
     flexDirection: "row",
     alignItems: "center",
+    backgroundColor: "#1A4D2E",
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
+    gap: 4,
+  },
+  bulkButton: {
+    flexDirection: "row",
+    alignItems: "center",
     backgroundColor: COLORS.orange,
     paddingHorizontal: 12,
     paddingVertical: 8,
-    borderRadius: 10,
+    borderRadius: 8,
+    gap: 4,
   },
   addButtonText: {
     color: "#FFFFFF",

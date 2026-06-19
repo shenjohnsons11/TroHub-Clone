@@ -39,6 +39,13 @@ exports.createContract = async (req, res) => {
         // Mảng services có dạng: [{ serviceId: "...", fixedPrice: 4000 }]
         const { roomId, tenantId, startDate, endDate, fixedRentPrice, fixedDeposit, services } = req.body;
 
+        // 1. Ràng buộc Phòng: Kiểm tra phòng có đang trống không
+        const room = await Room.findById(roomId);
+        if (!room) return res.status(404).json({ success: false, message: "Không tìm thấy phòng!" });
+        if (room.status === 1) {
+            return res.status(400).json({ success: false, message: "Phòng này đang có người thuê, không thể tạo hợp đồng mới!" });
+        }
+
         const newContract = new Contract({
             roomId,
             tenantId,
@@ -143,7 +150,15 @@ exports.updateContract = async (req, res) => {
         }
 
         const updateData = {};
-        if (roomId !== undefined) updateData.roomId = roomId;
+        if (roomId !== undefined) {
+            if (roomId.toString() !== existing.roomId.toString()) {
+                const newRoom = await Room.findById(roomId);
+                if (newRoom && newRoom.status === 1) {
+                    return res.status(400).json({ success: false, message: "Phòng mới bạn chọn đang có người thuê!" });
+                }
+            }
+            updateData.roomId = roomId;
+        }
         if (tenantId !== undefined) updateData.tenantId = tenantId;
         if (startDate !== undefined) updateData.startDate = startDate;
         if (endDate !== undefined) updateData.endDate = endDate;

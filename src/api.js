@@ -75,6 +75,7 @@ export const api = {
       }
     },
     createRepair: (payload) => fetchAPI(`${API_CONFIG.ENDPOINTS.me}/repairs`, { method: "POST", body: JSON.stringify(payload) }),
+    deleteRepair: (id) => fetchAPI(`${API_CONFIG.ENDPOINTS.me}/repairs/${id}`, { method: "DELETE" }),
     payInvoice: (id, payload = {}) => fetchAPI(`${API_CONFIG.ENDPOINTS.me}/pay-invoice/${id}`, { method: "PUT", body: JSON.stringify(payload) }),
     signContract: (id) => fetchAPI(`${API_CONFIG.ENDPOINTS.me}/sign-contract/${id}`, { method: "PUT", body: JSON.stringify({}) }),
     requestTerminate: (contractId) => fetchAPI(`${API_CONFIG.ENDPOINTS.me}/request-terminate/${contractId}`, { method: "PUT", body: JSON.stringify({}) }),
@@ -141,6 +142,13 @@ export const api = {
       const data = await fetchAPI(API_CONFIG.ENDPOINTS.invoices);
       return Array.isArray(data) ? data.map(API_CONFIG.MAP_INVOICE) : [];
     },
+    getBulkPreview: async () => {
+      const data = await fetchAPI(`${API_CONFIG.ENDPOINTS.invoices}/bulk-preview`);
+      return Array.isArray(data) ? data : [];
+    },
+    bulkCreate: async (payload) => {
+      return fetchAPI(`${API_CONFIG.ENDPOINTS.invoices}/bulk`, { method: "POST", body: JSON.stringify(payload) });
+    },
     create: async (payload) => {
       const data = await fetchAPI(API_CONFIG.ENDPOINTS.invoices, { method: "POST", body: JSON.stringify(payload) });
       return API_CONFIG.MAP_INVOICE(data);
@@ -175,7 +183,8 @@ export const api = {
     update: async (id, payload) => {
       const data = await fetchAPI(`${API_CONFIG.ENDPOINTS.repairs}/${id}`, { method: "PUT", body: JSON.stringify(payload) });
       return API_CONFIG.MAP_REPAIR(data);
-    }
+    },
+    delete: (id) => fetchAPI(`${API_CONFIG.ENDPOINTS.repairs}/${id}`, { method: "DELETE" })
   },
   settings: {
     get: async () => {
