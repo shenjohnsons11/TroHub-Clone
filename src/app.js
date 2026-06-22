@@ -2185,7 +2185,7 @@ app.addEventListener("change", (event) => {
     render();
     return;
   }
-
+// test 
   if (target.dataset.action === "toggle-repair" || target.dataset.action === "toggle-repair-tenant") {
     const id = target.dataset.id;
     state.selectedRepairsForDelete = state.selectedRepairsForDelete || [];
